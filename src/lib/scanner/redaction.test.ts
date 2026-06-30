@@ -13,4 +13,13 @@ describe("redactSecrets", () => {
       "github_token: ghp_...redacted..."
     );
   });
+
+  it("redacts compound credential keys", () => {
+    expect(redactSecrets("DATABASE_PASSWORD=supersecretvalue123456")).toBe(
+      "DATABASE_PASSWORD=...redacted..."
+    );
+    expect(redactSecrets('AWS_SECRET_ACCESS_KEY="abcdefghijklmnopqrstuvwxyz123456"')).toBe(
+      'AWS_SECRET_ACCESS_KEY="...redacted..."'
+    );
+  });
 });

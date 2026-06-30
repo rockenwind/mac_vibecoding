@@ -2,7 +2,7 @@ const secretPatterns: Array<[RegExp, string]> = [
   [/\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}\b/g, "sk-...redacted..."],
   [/\bgh[pousr]_[A-Za-z0-9_]{20,}\b/g, "ghp_...redacted..."],
   [
-    /\b((?:api[_-]?key|token|secret|password)\s*[:=]\s*)(["']?)[A-Za-z0-9_./+=-]{16,}\2/gi,
+    /\b((?=[A-Za-z0-9_-]*(?:api[_-]?key|apikey|token|secret|password))[A-Za-z0-9_-]+\s*[:=]\s*)(["']?)(?!(?:sk-|gh[pousr]_)?\.\.\.redacted\.\.\.\2)[A-Za-z0-9_./+=-]{16,}\2/gi,
     "$1$2...redacted...$2"
   ]
 ];

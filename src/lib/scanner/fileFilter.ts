@@ -59,6 +59,11 @@ export function shouldScanFile(file: { path: string; size: number }): boolean {
   }
 
   const lowerPath = normalized.toLowerCase();
+  const lowerFileName = fileName.toLowerCase();
+  if (lowerFileName === ".env" || lowerFileName.startsWith(".env.")) {
+    return true;
+  }
+
   if (aiPathHints.some((hint) => lowerPath.includes(hint))) {
     return true;
   }

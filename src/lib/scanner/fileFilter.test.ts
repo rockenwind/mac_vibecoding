@@ -8,6 +8,11 @@ describe("shouldScanFile", () => {
     expect(shouldScanFile({ path: "mcp.json", size: 1000 })).toBe(true);
   });
 
+  it("includes environment file variants", () => {
+    expect(shouldScanFile({ path: ".env.local", size: 1000 })).toBe(true);
+    expect(shouldScanFile({ path: "config/.env.production", size: 1000 })).toBe(true);
+  });
+
   it("excludes generated folders and lockfiles", () => {
     expect(shouldScanFile({ path: "node_modules/pkg/index.js", size: 1000 })).toBe(false);
     expect(shouldScanFile({ path: "package-lock.json", size: 1000 })).toBe(false);
