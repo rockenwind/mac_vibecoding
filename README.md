@@ -1,4 +1,4 @@
-# Network Security Service
+# mac_vibecoding
 
 Network and security service workspace connected to `rockenwind/mac_vibecoding`.
 
