@@ -57,11 +57,12 @@ Create `package.json`:
   "name": "mac-vibecoding-ai-security-inspector",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@11.7.0",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest"
   },
@@ -105,7 +106,12 @@ Create `tsconfig.json`:
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"]
-    }
+    },
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ]
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
   "exclude": ["node_modules"]
