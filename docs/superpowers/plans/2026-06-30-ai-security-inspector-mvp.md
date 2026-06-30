@@ -13,6 +13,7 @@
 ## File Structure
 
 - Create: `package.json` for scripts and dependencies.
+- Create: `pnpm-workspace.yaml` for approved native dependency build scripts.
 - Create: `tsconfig.json` for strict TypeScript settings.
 - Create: `next.config.mjs` for Next.js defaults.
 - Create: `vitest.config.ts` for unit and component tests.
@@ -56,12 +57,13 @@ Create `package.json`:
   "name": "mac-vibecoding-ai-security-inspector",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@11.7.0",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "test": "vitest run",
+    "lint": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
     "test:watch": "vitest"
   },
   "dependencies": {
@@ -104,7 +106,12 @@ Create `tsconfig.json`:
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"]
-    }
+    },
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ]
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
   "exclude": ["node_modules"]
@@ -200,20 +207,20 @@ textarea {
 
 - [ ] **Step 3: Install dependencies**
 
-Run: `npm install`
+Run: `pnpm install`
 
-Expected: dependency installation completes and creates `package-lock.json`.
+Expected: dependency installation completes and creates `pnpm-lock.yaml`. If pnpm requests build-script approval for native dependencies, approve the listed builds and commit `pnpm-workspace.yaml`.
 
 - [ ] **Step 4: Run baseline checks**
 
-Run: `npm test`
+Run: `CI=true pnpm test`
 
 Expected: Vitest exits successfully with no tests found or an empty-suite notice accepted by the runner.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add package.json package-lock.json tsconfig.json next.config.mjs vitest.config.ts src/app/layout.tsx src/app/globals.css
+git add .gitignore package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json next.config.mjs vitest.config.ts src/app/layout.tsx src/app/globals.css docs/superpowers/plans/2026-06-30-ai-security-inspector-mvp.md
 git commit -m "chore: scaffold ai security inspector app"
 ```
 
@@ -265,7 +272,7 @@ describe("parseGitHubRepositoryUrl", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `npm test -- src/lib/github/url.test.ts`
+Run: `CI=true pnpm test -- src/lib/github/url.test.ts`
 
 Expected: FAIL because `src/lib/github/url.ts` does not exist.
 
@@ -369,7 +376,7 @@ export function parseGitHubRepositoryUrl(input: string): RepositoryRef {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `npm test -- src/lib/github/url.test.ts`
+Run: `CI=true pnpm test -- src/lib/github/url.test.ts`
 
 Expected: PASS.
 
@@ -405,7 +412,7 @@ describe("shouldScanFile", () => {
 
   it("excludes generated folders and lockfiles", () => {
     expect(shouldScanFile({ path: "node_modules/pkg/index.js", size: 1000 })).toBe(false);
-    expect(shouldScanFile({ path: "package-lock.json", size: 1000 })).toBe(false);
+    expect(shouldScanFile({ path: "pnpm-lock.yaml", size: 1000 })).toBe(false);
     expect(shouldScanFile({ path: "dist/app.js", size: 1000 })).toBe(false);
   });
 
@@ -440,7 +447,7 @@ describe("redactSecrets", () => {
 
 - [ ] **Step 3: Run tests to verify they fail**
 
-Run: `npm test -- src/lib/scanner/fileFilter.test.ts src/lib/scanner/redaction.test.ts`
+Run: `CI=true pnpm test -- src/lib/scanner/fileFilter.test.ts src/lib/scanner/redaction.test.ts`
 
 Expected: FAIL because implementations do not exist.
 
@@ -461,7 +468,7 @@ const excludedSegments = new Set([
 ]);
 
 const excludedFileNames = new Set([
-  "package-lock.json",
+  "pnpm-lock.yaml",
   "pnpm-lock.yaml",
   "yarn.lock",
   "bun.lockb",
@@ -539,7 +546,7 @@ export function redactSecrets(value: string): string {
 
 - [ ] **Step 5: Run tests to verify they pass**
 
-Run: `npm test -- src/lib/scanner/fileFilter.test.ts src/lib/scanner/redaction.test.ts`
+Run: `CI=true pnpm test -- src/lib/scanner/fileFilter.test.ts src/lib/scanner/redaction.test.ts`
 
 Expected: PASS.
 
@@ -622,7 +629,7 @@ describe("analyzeFiles", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `npm test -- src/lib/scanner/analyzers.test.ts`
+Run: `CI=true pnpm test -- src/lib/scanner/analyzers.test.ts`
 
 Expected: FAIL because `analyzers.ts` does not exist.
 
@@ -753,7 +760,7 @@ function createFinding(input: {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `npm test -- src/lib/scanner/analyzers.test.ts`
+Run: `CI=true pnpm test -- src/lib/scanner/analyzers.test.ts`
 
 Expected: PASS.
 
@@ -806,7 +813,7 @@ describe("runScan", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `npm test -- src/lib/scanner/scan.test.ts`
+Run: `CI=true pnpm test -- src/lib/scanner/scan.test.ts`
 
 Expected: FAIL because `scan.ts` does not exist.
 
@@ -852,7 +859,7 @@ function createEmptySummary(): ScanSummary {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `npm test -- src/lib/scanner/scan.test.ts`
+Run: `CI=true pnpm test -- src/lib/scanner/scan.test.ts`
 
 Expected: PASS.
 
@@ -931,7 +938,7 @@ describe("POST /api/scans", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `npm test -- src/app/api/scans/route.test.ts`
+Run: `CI=true pnpm test -- src/app/api/scans/route.test.ts`
 
 Expected: FAIL because route and source files do not exist.
 
@@ -1054,7 +1061,7 @@ export async function POST(request: Request): Promise<Response> {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `npm test -- src/app/api/scans/route.test.ts`
+Run: `CI=true pnpm test -- src/app/api/scans/route.test.ts`
 
 Expected: PASS.
 
@@ -1138,7 +1145,7 @@ describe("Home", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `npm test -- src/app/page.test.tsx`
+Run: `CI=true pnpm test -- src/app/page.test.tsx`
 
 Expected: FAIL because `page.tsx` does not exist and jest-dom matchers are not configured.
 
@@ -1507,7 +1514,7 @@ h1 {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `npm test -- src/app/page.test.tsx`
+Run: `CI=true pnpm test -- src/app/page.test.tsx`
 
 Expected: PASS.
 
@@ -1544,19 +1551,19 @@ AI Security Inspector is a full-stack MVP for scanning public GitHub repositorie
 Install dependencies:
 
 ```bash
-npm install
+pnpm install
 ```
 
 Run tests:
 
 ```bash
-npm test
+CI=true pnpm test
 ```
 
 Run the web app:
 
 ```bash
-npm run dev
+pnpm run dev
 ```
 
 Open `http://localhost:3000` and enter a public GitHub repository URL.
@@ -1568,19 +1575,19 @@ The MVP supports public `github.com` repositories only. It does not authenticate
 
 - [ ] **Step 2: Run full test suite**
 
-Run: `npm test`
+Run: `CI=true pnpm test`
 
 Expected: PASS for all tests.
 
 - [ ] **Step 3: Run production build**
 
-Run: `npm run build`
+Run: `pnpm run build`
 
 Expected: PASS with a compiled Next.js app.
 
 - [ ] **Step 4: Start local dev server**
 
-Run: `npm run dev`
+Run: `pnpm run dev`
 
 Expected: dev server starts and prints a local URL, usually `http://localhost:3000`.
 
@@ -1606,4 +1613,3 @@ git commit -m "docs: document ai security inspector mvp"
 Run: `git push`
 
 Expected: `main` pushes to `origin/main`.
-
