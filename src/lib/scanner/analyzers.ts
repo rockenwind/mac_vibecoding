@@ -43,19 +43,11 @@ const rules: RuleMatch[] = [
       "Prompts that permit disclosure of hidden instructions weaken the boundary between user input and trusted control text.",
     fixSuggestion:
       "Remove disclosure instructions and add explicit refusal behavior for requests to reveal hidden prompts or secrets."
-  },
-  {
-    ruleId: "mcp.broad-filesystem-shell",
-    title: "MCP configuration combines shell access and broad filesystem access",
-    severity: "high",
-    category: "mcp",
-    pattern: /("command"\s*:\s*"(bash|sh|zsh|cmd|powershell)"|roots"\s*:\s*\[\s*"\/"\s*\])/i,
-    whyItMatters:
-      "Combining shell access with broad filesystem roots can let compromised tools read or modify sensitive local files.",
-    fixSuggestion:
-      "Limit filesystem roots to project directories and avoid exposing unrestricted shell commands through MCP tools."
   }
 ];
+
+const mcpShellCommandPattern = /"command"\s*:\s*"(bash|sh|zsh|cmd|powershell)"/i;
+const mcpBroadRootPattern = /"roots"\s*:\s*\[\s*"\/"\s*\]/i;
 
 export function analyzeFiles(files: RepositoryFile[]): Finding[] {
   const findings: Finding[] = [];
@@ -73,6 +65,24 @@ export function analyzeFiles(files: RepositoryFile[]): Finding[] {
           evidence: file.path,
           whyItMatters: "Environment files often contain API keys, database credentials, and deployment secrets.",
           fixSuggestion: "Remove committed environment files and commit a safe example file such as .env.example."
+        })
+      );
+    }
+
+    if (hasBroadFilesystemShellMcpRisk(file.content)) {
+      findings.push(
+        createFinding({
+          file,
+          lineNumber: firstMatchingLineNumber(file.content, [mcpShellCommandPattern, mcpBroadRootPattern]),
+          ruleId: "mcp.broad-filesystem-shell",
+          title: "MCP configuration combines shell access and broad filesystem access",
+          severity: "high",
+          category: "mcp",
+          evidence: redactSecrets(firstMatchingLine(file.content, [mcpShellCommandPattern, mcpBroadRootPattern]).trim()),
+          whyItMatters:
+            "Combining shell access with broad filesystem roots can let compromised tools read or modify sensitive local files.",
+          fixSuggestion:
+            "Limit filesystem roots to project directories and avoid exposing unrestricted shell commands through MCP tools."
         })
       );
     }
@@ -103,9 +113,24 @@ export function analyzeFiles(files: RepositoryFile[]): Finding[] {
 }
 
 function isEnvironmentFile(path: string): boolean {
-  const fileName = path.split("/").at(-1) ?? path;
+  const normalized = path.replaceAll("\\", "/");
+  const fileName = (normalized.split("/").at(-1) ?? normalized).toLowerCase();
 
   return fileName === ".env" || fileName.startsWith(".env.");
+}
+
+function hasBroadFilesystemShellMcpRisk(content: string): boolean {
+  return mcpShellCommandPattern.test(content) && mcpBroadRootPattern.test(content);
+}
+
+function firstMatchingLine(content: string, patterns: RegExp[]): string {
+  return content.split(/\r?\n/).find((line) => patterns.some((pattern) => pattern.test(line))) ?? content;
+}
+
+function firstMatchingLineNumber(content: string, patterns: RegExp[]): number {
+  const index = content.split(/\r?\n/).findIndex((line) => patterns.some((pattern) => pattern.test(line)));
+
+  return index === -1 ? 1 : index + 1;
 }
 
 function createFinding(input: {

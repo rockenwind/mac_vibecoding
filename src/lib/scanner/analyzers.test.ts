@@ -41,4 +41,38 @@ describe("analyzeFiles", () => {
       "SERVICE_API_KEY=...redacted..."
     );
   });
+
+  it("does not flag MCP configs with only shell access or only broad filesystem access", () => {
+    const findings = analyzeFiles([
+      {
+        path: "mcp-command-only.json",
+        size: 68,
+        content: "{\"servers\":{\"local\":{\"command\":\"bash\",\"args\":[\"-lc\",\"echo hi\"]}}}"
+      },
+      {
+        path: "mcp-root-only.json",
+        size: 52,
+        content: "{\"servers\":{\"local\":{\"roots\":[\"/\"],\"command\":\"node\"}}}"
+      }
+    ]);
+
+    expect(findings.map((finding) => finding.ruleId)).not.toContain("mcp.broad-filesystem-shell");
+  });
+
+  it("flags environment files with backslash paths and mixed-case names", () => {
+    const findings = analyzeFiles([
+      {
+        path: "config\\.env.production",
+        size: 0,
+        content: ""
+      },
+      {
+        path: ".ENV.local",
+        size: 0,
+        content: ""
+      }
+    ]);
+
+    expect(findings.filter((finding) => finding.ruleId === "secret.env-file")).toHaveLength(2);
+  });
 });
