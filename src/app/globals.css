@@ -77,6 +77,34 @@ summary:focus-visible {
   padding-bottom: 18px;
 }
 
+.workspace-actions {
+  align-items: flex-end;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dashboard-link {
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  color: var(--text);
+  display: inline-flex;
+  font-size: 0.9rem;
+  font-weight: 700;
+  min-height: 38px;
+  padding: 9px 12px;
+  text-decoration: none;
+}
+
+.dashboard-link:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.22);
+  outline-offset: 2px;
+}
+
+.dashboard-link:hover {
+  background: #eef1f6;
+}
+
 .eyebrow,
 .panel-kicker,
 .workspace-note,
@@ -377,6 +405,7 @@ pre {
   }
 
   .workspace-header,
+  .workspace-actions,
   .input-row,
   .panel-heading {
     align-items: stretch;

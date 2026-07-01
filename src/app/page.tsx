@@ -4,6 +4,8 @@ import { FormEvent, useMemo, useState } from "react";
 import type { ScanResult, Severity } from "@/lib/scanner/types";
 
 const severities: Severity[] = ["critical", "high", "medium", "low", "info"];
+const vibecodingDashboardUrl =
+  process.env.NEXT_PUBLIC_VIBECODING_URL ?? "http://127.0.0.1:8000/login";
 
 const severityLabels: Record<Severity, string> = {
   critical: "Critical",
@@ -79,7 +81,12 @@ export default function Home() {
             <p className="eyebrow">AI Security Inspector</p>
             <h1 id="scanner-title">Repository scan</h1>
           </div>
-          <p className="workspace-note">Public GitHub repositories only</p>
+          <div className="workspace-actions">
+            <a className="dashboard-link" href={vibecodingDashboardUrl}>
+              Job dashboard
+            </a>
+            <p className="workspace-note">Public GitHub repositories only</p>
+          </div>
         </header>
 
         <form className="scan-form" onSubmit={handleSubmit}>

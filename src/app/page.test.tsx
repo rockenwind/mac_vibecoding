@@ -54,4 +54,13 @@ describe("Home", () => {
     expect(screen.getByText("Critical")).toBeInTheDocument();
     expect(screen.getByText(".env:1")).toBeInTheDocument();
   });
+
+  it("links to the local job dashboard", () => {
+    render(<Home />);
+
+    expect(screen.getByRole("link", { name: "Job dashboard" })).toHaveAttribute(
+      "href",
+      "http://127.0.0.1:8000/login"
+    );
+  });
 });
