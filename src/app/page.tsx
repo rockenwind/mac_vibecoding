@@ -40,6 +40,7 @@ export default function Home() {
   const [scan, setScan] = useState<ScanResult | null>(null);
   const [marketSignals, setMarketSignals] = useState<MarketSignalsResponse | null>(null);
   const [selectedSignalArea, setSelectedSignalArea] = useState<string | null>(null);
+  const [appliedSignal, setAppliedSignal] = useState<MarketSignal | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
 
@@ -86,7 +87,16 @@ export default function Home() {
       const response = await fetch("/api/scans", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repositoryUrl })
+        body: JSON.stringify({
+          repositoryUrl,
+          focus: appliedSignal
+            ? {
+                area: appliedSignal.area,
+                keywords: appliedSignal.template.scanKeywords,
+                checklist: appliedSignal.template.checklist
+              }
+            : undefined
+        })
       });
       const data = (await response.json()) as ScanResponse;
 
@@ -197,6 +207,13 @@ export default function Home() {
                     <li key={item}>{item}</li>
                   ))}
                 </ul>
+                <button
+                  className="apply-template-button"
+                  type="button"
+                  onClick={() => setAppliedSignal(selectedSignal)}
+                >
+                  이 기준으로 스캔 준비
+                </button>
               </section>
             ) : null}
           </section>
@@ -228,6 +245,14 @@ export default function Home() {
                 {findingCount === 1 ? "1 finding" : `${findingCount} findings`} on{" "}
                 {scan.repository.defaultBranch}
               </p>
+
+              {scan.focus ? (
+                <div className="scan-focus" role="status">
+                  <h3>적용된 점검 기준</h3>
+                  <p>{scan.focus.area}</p>
+                  <span>{scan.focus.keywords.join(", ")}</span>
+                </div>
+              ) : null}
 
               {scan.warnings.length ? (
                 <div className="warnings" role="status" aria-label="Scan warnings">

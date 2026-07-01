@@ -6,7 +6,7 @@ describe("Home", () => {
   beforeEach(() => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = input.toString();
         if (url === "/api/market-signals") {
           return {
@@ -36,6 +36,8 @@ describe("Home", () => {
           };
         }
 
+        const requestBody = typeof init?.body === "string" ? JSON.parse(init.body) : {};
+
         return {
           ok: true,
           json: async () => ({
@@ -47,6 +49,7 @@ describe("Home", () => {
                 url: "https://github.com/example/repo",
                 defaultBranch: "main"
               },
+              focus: requestBody.focus,
               summary: { critical: 1, high: 1, medium: 0, low: 0, info: 0 },
               warnings: [],
               findings: [
@@ -114,5 +117,32 @@ describe("Home", () => {
     expect(screen.getByText("최근 공고에서 클라우드 보안, AWS, IAM 수요가 확인됩니다.")).toBeInTheDocument();
     expect(screen.getByText("권한 상승이 가능한 IAM 정책과 장기 접근 키를 확인합니다.")).toBeInTheDocument();
     expect(screen.getAllByText("클라우드 보안, AWS, IAM")).toHaveLength(2);
+  });
+
+  it("applies a market recommendation to the next repository scan", async () => {
+    const fetchMock = vi.mocked(fetch);
+    render(<Home />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /클라우드 권한과 비밀값 노출/ }));
+    fireEvent.click(screen.getByRole("button", { name: "이 기준으로 스캔 준비" }));
+    fireEvent.change(screen.getByLabelText("GitHub repository URL"), {
+      target: { value: "https://github.com/example/repo" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Scan repository" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Possible exposed credential")).toBeInTheDocument();
+    });
+
+    const scanRequest = fetchMock.mock.calls.find(([input]) => input.toString() === "/api/scans");
+    expect(JSON.parse(scanRequest?.[1]?.body as string)).toMatchObject({
+      repositoryUrl: "https://github.com/example/repo",
+      focus: {
+        area: "클라우드 권한과 비밀값 노출",
+        keywords: ["클라우드 보안", "AWS", "IAM"],
+        checklist: expect.arrayContaining(["권한 상승이 가능한 IAM 정책과 장기 접근 키를 확인합니다."])
+      }
+    });
+    expect(screen.getByText("적용된 점검 기준")).toBeInTheDocument();
   });
 });
