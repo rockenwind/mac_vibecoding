@@ -1,0 +1,3 @@
+[submodule "apps/vibecoding"]
+	path = apps/vibecoding
+	url = git@github.com:rockenwind/vibecoding.git
