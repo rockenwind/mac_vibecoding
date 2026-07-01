@@ -26,6 +26,14 @@ export type MarketSignalsReport = {
   generatedAt: string;
   sampleSize: number;
   signals: MarketSignal[];
+  weeklyTrend: WeeklyMarketTrend;
+};
+
+export type WeeklyMarketTrend = {
+  currentWeekJobs: number;
+  previousWeekJobs: number;
+  direction: "up" | "down" | "flat";
+  summary: string;
 };
 
 const signalDefinitions: MarketSignal[] = [
@@ -128,7 +136,8 @@ export function buildMarketSignals(
   return {
     generatedAt: now.toISOString(),
     sampleSize: jobs.length,
-    signals
+    signals,
+    weeklyTrend: buildWeeklyTrend(jobs, now)
   };
 }
 
@@ -182,4 +191,61 @@ function countCompanyJobs(jobs: MarketJob[], targetJob: MarketJob): number {
 
 function normalizeCompany(company: MarketJob["company"], fallback: string): string {
   return company?.trim().toLocaleLowerCase() || fallback.trim().toLocaleLowerCase();
+}
+
+function buildWeeklyTrend(jobs: MarketJob[], now: Date): WeeklyMarketTrend {
+  const currentWeekJobs = countJobsInRange(jobs, now, 0, 7);
+  const previousWeekJobs = countJobsInRange(jobs, now, 7, 14);
+  const direction = getTrendDirection(currentWeekJobs, previousWeekJobs);
+
+  return {
+    currentWeekJobs,
+    previousWeekJobs,
+    direction,
+    summary: buildTrendSummary(currentWeekJobs, previousWeekJobs, direction)
+  };
+}
+
+function countJobsInRange(
+  jobs: MarketJob[],
+  now: Date,
+  startDaysAgo: number,
+  endDaysAgo: number
+): number {
+  return jobs.filter((job) => {
+    if (!job.firstSeenAt) {
+      return false;
+    }
+    const seenAt = job.firstSeenAt instanceof Date ? job.firstSeenAt : new Date(job.firstSeenAt);
+    if (Number.isNaN(seenAt.getTime())) {
+      return false;
+    }
+    const ageInDays = (now.getTime() - seenAt.getTime()) / 86_400_000;
+    return ageInDays >= startDaysAgo && ageInDays < endDaysAgo;
+  }).length;
+}
+
+function getTrendDirection(currentWeekJobs: number, previousWeekJobs: number): WeeklyMarketTrend["direction"] {
+  if (currentWeekJobs > previousWeekJobs) {
+    return "up";
+  }
+  if (currentWeekJobs < previousWeekJobs) {
+    return "down";
+  }
+  return "flat";
+}
+
+function buildTrendSummary(
+  currentWeekJobs: number,
+  previousWeekJobs: number,
+  direction: WeeklyMarketTrend["direction"]
+): string {
+  const prefix = `최근 7일 공고 ${currentWeekJobs}건, 이전 7일 공고 ${previousWeekJobs}건`;
+  if (direction === "up") {
+    return `${prefix}으로 수요가 늘었습니다.`;
+  }
+  if (direction === "down") {
+    return `${prefix}으로 수요가 줄었습니다.`;
+  }
+  return `${prefix}으로 비슷한 흐름입니다.`;
 }
