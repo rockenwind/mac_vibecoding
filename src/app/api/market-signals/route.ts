@@ -5,9 +5,11 @@ import { buildMarketSignals, type MarketJob } from "@/lib/marketSignals/signals"
 export const dynamic = "force-dynamic";
 
 type JobRow = {
+  company: string | null;
   title: string;
   description: string;
   matched_keywords: unknown;
+  first_seen_at: Date | string | null;
 };
 
 export async function GET() {
@@ -22,7 +24,7 @@ export async function GET() {
 
   try {
     const result = await pool.query<JobRow>(
-      `SELECT title, description, matched_keywords
+      `SELECT company, title, description, matched_keywords, first_seen_at
        FROM jobs
        WHERE first_seen_at >= NOW() - INTERVAL '30 days'
        ORDER BY first_seen_at DESC
@@ -37,10 +39,12 @@ export async function GET() {
 
 function toMarketJob(row: JobRow): MarketJob {
   return {
+    company: row.company,
     title: row.title,
     description: row.description,
     matchedKeywords: Array.isArray(row.matched_keywords)
       ? row.matched_keywords.filter((keyword): keyword is string => typeof keyword === "string")
-      : []
+      : [],
+    firstSeenAt: row.first_seen_at
   };
 }

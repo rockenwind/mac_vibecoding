@@ -18,7 +18,18 @@ describe("Home", () => {
                 {
                   area: "클라우드 권한과 비밀값 노출",
                   keywords: ["클라우드 보안", "AWS", "IAM"],
-                  score: 8
+                  score: 8,
+                  jobCount: 3,
+                  trend: "최근 공고에서 클라우드 보안, AWS, IAM 수요가 확인됩니다.",
+                  template: {
+                    purpose: "클라우드 권한과 비밀값 노출 위험을 빠르게 확인합니다.",
+                    scanKeywords: ["클라우드 보안", "AWS", "IAM"],
+                    reviewTargets: ["인프라 설정", "환경 변수"],
+                    checklist: [
+                      "권한 상승이 가능한 IAM 정책과 장기 접근 키를 확인합니다.",
+                      "저장소와 배포 설정에 클라우드 비밀값이 남아 있는지 확인합니다."
+                    ]
+                  }
                 }
               ]
             })
@@ -91,5 +102,17 @@ describe("Home", () => {
     expect(await screen.findByText("시장 수요 기반 추천 점검")).toBeInTheDocument();
     expect(screen.getByText("클라우드 권한과 비밀값 노출")).toBeInTheDocument();
     expect(screen.getByText("최근 공고 12건 기준")).toBeInTheDocument();
+  });
+
+  it("opens a security checklist when a market recommendation is selected", async () => {
+    render(<Home />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /클라우드 권한과 비밀값 노출/ }));
+
+    expect(screen.getByText("추천 점검 템플릿")).toBeInTheDocument();
+    expect(screen.getByText("클라우드 권한과 비밀값 노출 위험을 빠르게 확인합니다.")).toBeInTheDocument();
+    expect(screen.getByText("최근 공고에서 클라우드 보안, AWS, IAM 수요가 확인됩니다.")).toBeInTheDocument();
+    expect(screen.getByText("권한 상승이 가능한 IAM 정책과 장기 접근 키를 확인합니다.")).toBeInTheDocument();
+    expect(screen.getAllByText("클라우드 보안, AWS, IAM")).toHaveLength(2);
   });
 });
