@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { ScanResult, Severity } from "@/lib/scanner/types";
+import type { MarketSignalsReport } from "@/lib/marketSignals/signals";
 
 const severities: Severity[] = ["critical", "high", "medium", "low", "info"];
 const vibecodingDashboardUrl =
@@ -20,6 +21,8 @@ type ScanResponse = {
   error?: string;
 };
 
+type MarketSignalsResponse = MarketSignalsReport;
+
 function formatLocation(filePath: string, lineStart?: number, lineEnd?: number): string {
   if (lineStart === undefined) {
     return filePath;
@@ -35,12 +38,40 @@ function formatLocation(filePath: string, lineStart?: number, lineEnd?: number):
 export default function Home() {
   const [repositoryUrl, setRepositoryUrl] = useState("");
   const [scan, setScan] = useState<ScanResult | null>(null);
+  const [marketSignals, setMarketSignals] = useState<MarketSignalsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
 
   const hasFindings = Boolean(scan?.findings.length);
   const findingCount = scan?.findings.length ?? 0;
   const reportJson = useMemo(() => (scan ? JSON.stringify(scan, null, 2) : ""), [scan]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadMarketSignals() {
+      try {
+        const response = await fetch("/api/market-signals");
+        if (!response.ok) {
+          return;
+        }
+        const data = (await response.json()) as MarketSignalsResponse;
+        if (isMounted) {
+          setMarketSignals(data);
+        }
+      } catch {
+        if (isMounted) {
+          setMarketSignals(null);
+        }
+      }
+    }
+
+    void loadMarketSignals();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -112,6 +143,26 @@ export default function Home() {
           <div className="status-message status-error" role="alert">
             {error}
           </div>
+        ) : null}
+
+        {marketSignals && marketSignals.signals.length ? (
+          <section className="panel market-panel" aria-labelledby="market-title">
+            <div className="panel-heading">
+              <div>
+                <p className="panel-kicker">Market signals</p>
+                <h2 id="market-title">시장 수요 기반 추천 점검</h2>
+              </div>
+              <span className="scan-id">최근 공고 {marketSignals.sampleSize}건 기준</span>
+            </div>
+            <ul className="market-list">
+              {marketSignals.signals.slice(0, 3).map((signal) => (
+                <li key={signal.area}>
+                  <strong>{signal.area}</strong>
+                  <span>{signal.keywords.join(", ")}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
         ) : null}
 
         {scan ? (
