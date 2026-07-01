@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { ScanResult, Severity } from "@/lib/scanner/types";
-import type { MarketSignalsReport } from "@/lib/marketSignals/signals";
+import type { MarketSignal, MarketSignalsReport } from "@/lib/marketSignals/signals";
 
 const severities: Severity[] = ["critical", "high", "medium", "low", "info"];
 const vibecodingDashboardUrl =
@@ -39,12 +39,16 @@ export default function Home() {
   const [repositoryUrl, setRepositoryUrl] = useState("");
   const [scan, setScan] = useState<ScanResult | null>(null);
   const [marketSignals, setMarketSignals] = useState<MarketSignalsResponse | null>(null);
+  const [selectedSignalArea, setSelectedSignalArea] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
 
   const hasFindings = Boolean(scan?.findings.length);
   const findingCount = scan?.findings.length ?? 0;
   const reportJson = useMemo(() => (scan ? JSON.stringify(scan, null, 2) : ""), [scan]);
+  const recommendedSignals = marketSignals?.signals.slice(0, 3) ?? [];
+  const selectedSignal: MarketSignal | null =
+    recommendedSignals.find((signal) => signal.area === selectedSignalArea) ?? recommendedSignals[0] ?? null;
 
   useEffect(() => {
     let isMounted = true;
@@ -155,13 +159,46 @@ export default function Home() {
               <span className="scan-id">최근 공고 {marketSignals.sampleSize}건 기준</span>
             </div>
             <ul className="market-list">
-              {marketSignals.signals.slice(0, 3).map((signal) => (
+              {recommendedSignals.map((signal) => (
                 <li key={signal.area}>
-                  <strong>{signal.area}</strong>
-                  <span>{signal.keywords.join(", ")}</span>
+                  <button
+                    aria-pressed={selectedSignal?.area === signal.area}
+                    className="market-signal-button"
+                    type="button"
+                    onClick={() => setSelectedSignalArea(signal.area)}
+                  >
+                    <strong>{signal.area}</strong>
+                    <span>{signal.keywords.join(", ")}</span>
+                    <small>수요 {signal.jobCount}개 회사 · 점수 {signal.score}</small>
+                  </button>
                 </li>
               ))}
             </ul>
+            {selectedSignal ? (
+              <section className="market-template" aria-labelledby="market-template-title">
+                <div>
+                  <p className="panel-kicker">Recommended checklist</p>
+                  <h3 id="market-template-title">추천 점검 템플릿</h3>
+                  <p className="market-trend">{selectedSignal.trend}</p>
+                </div>
+                <p>{selectedSignal.template.purpose}</p>
+                <dl className="template-grid">
+                  <div>
+                    <dt>추천 키워드</dt>
+                    <dd>{selectedSignal.template.scanKeywords.join(", ")}</dd>
+                  </div>
+                  <div>
+                    <dt>확인 대상</dt>
+                    <dd>{selectedSignal.template.reviewTargets.join(", ")}</dd>
+                  </div>
+                </dl>
+                <ul className="template-checklist">
+                  {selectedSignal.template.checklist.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
           </section>
         ) : null}
 

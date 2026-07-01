@@ -23,9 +23,11 @@ describe("GET /api/market-signals", () => {
     queryMock.mockResolvedValueOnce({
       rows: [
         {
+          company: "테스트클라우드",
           title: "클라우드 보안 엔지니어",
           description: "AWS IAM과 API 보안 운영",
-          matched_keywords: ["클라우드 보안"]
+          matched_keywords: ["클라우드 보안"],
+          first_seen_at: new Date("2026-06-30T00:00:00Z")
         }
       ]
     });
@@ -37,8 +39,13 @@ describe("GET /api/market-signals", () => {
     expect(body.sampleSize).toBe(1);
     expect(body.signals[0]).toMatchObject({
       area: "클라우드 권한과 비밀값 노출",
-      score: 3
+      jobCount: 1,
+      template: {
+        purpose: "클라우드 권한과 비밀값 노출 위험을 빠르게 확인합니다."
+      }
     });
+    expect(queryMock.mock.calls[0][0]).toContain("company");
+    expect(queryMock.mock.calls[0][0]).toContain("first_seen_at");
     expect(endMock).toHaveBeenCalledOnce();
   });
 
