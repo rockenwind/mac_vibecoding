@@ -299,6 +299,10 @@ h3 {
   line-height: 1.5;
 }
 
+.apply-template-button {
+  justify-self: start;
+}
+
 .results-grid {
   align-items: start;
   display: grid;
@@ -397,6 +401,26 @@ h3 {
   border-top: 1px solid var(--line);
   margin-top: 18px;
   padding-top: 16px;
+}
+
+.scan-focus {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 6px;
+  margin-top: 18px;
+  padding-top: 16px;
+}
+
+.scan-focus p {
+  font-weight: 700;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.scan-focus span {
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
 }
 
 .warnings ul,

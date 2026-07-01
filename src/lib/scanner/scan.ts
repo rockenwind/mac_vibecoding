@@ -1,6 +1,14 @@
 import { analyzeFiles } from "./analyzers";
 import { shouldScanFile } from "./fileFilter";
-import type { RepositoryFile, RepositoryRef, ScanResult, ScanSummary, ScanWarning, Severity } from "./types";
+import type {
+  RepositoryFile,
+  RepositoryRef,
+  ScanFocus,
+  ScanResult,
+  ScanSummary,
+  ScanWarning,
+  Severity
+} from "./types";
 
 const severities: Severity[] = ["critical", "high", "medium", "low", "info"];
 
@@ -8,6 +16,7 @@ export function runScan(input: {
   repository: Required<RepositoryRef>;
   files: RepositoryFile[];
   warnings: ScanWarning[];
+  focus?: ScanFocus;
 }): ScanResult {
   const selectedFiles = input.files.filter((file) =>
     shouldScanFile({ path: file.path, size: file.size })
@@ -24,7 +33,8 @@ export function runScan(input: {
     repository: input.repository,
     summary,
     findings,
-    warnings: input.warnings
+    warnings: input.warnings,
+    focus: input.focus
   };
 }
 

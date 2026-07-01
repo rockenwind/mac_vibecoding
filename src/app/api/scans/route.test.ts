@@ -44,6 +44,31 @@ describe("POST /api/scans", () => {
     expect(body.scan.findings.length).toBeGreaterThan(0);
   });
 
+  it("accepts market signal focus metadata for a scan", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/scans", {
+        method: "POST",
+        body: JSON.stringify({
+          repositoryUrl: "https://github.com/example/repo",
+          focus: {
+            area: "클라우드 권한과 비밀값 노출",
+            keywords: ["클라우드 보안", "AWS", "IAM"],
+            checklist: ["권한 상승이 가능한 IAM 정책과 장기 접근 키를 확인합니다."]
+          }
+        })
+      })
+    );
+
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.scan.focus).toEqual({
+      area: "클라우드 권한과 비밀값 노출",
+      keywords: ["클라우드 보안", "AWS", "IAM"],
+      checklist: ["권한 상승이 가능한 IAM 정책과 장기 접근 키를 확인합니다."]
+    });
+  });
+
   it("returns 400 for an invalid URL", async () => {
     const response = await POST(
       new Request("http://localhost/api/scans", {
