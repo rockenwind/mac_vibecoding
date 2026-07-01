@@ -14,6 +14,12 @@ describe("Home", () => {
             json: async () => ({
               generatedAt: "2026-07-01T00:00:00.000Z",
               sampleSize: 12,
+              weeklyTrend: {
+                currentWeekJobs: 7,
+                previousWeekJobs: 4,
+                direction: "up",
+                summary: "최근 7일 공고 7건, 이전 7일 공고 4건으로 수요가 늘었습니다."
+              },
               signals: [
                 {
                   area: "클라우드 권한과 비밀값 노출",
@@ -105,6 +111,7 @@ describe("Home", () => {
     expect(await screen.findByText("시장 수요 기반 추천 점검")).toBeInTheDocument();
     expect(screen.getByText("클라우드 권한과 비밀값 노출")).toBeInTheDocument();
     expect(screen.getByText("최근 공고 12건 기준")).toBeInTheDocument();
+    expect(screen.getByText("최근 7일 공고 7건, 이전 7일 공고 4건으로 수요가 늘었습니다.")).toBeInTheDocument();
   });
 
   it("opens a security checklist when a market recommendation is selected", async () => {

@@ -85,4 +85,33 @@ describe("buildMarketSignals", () => {
     expect(result.signals[0].jobCount).toBe(1);
     expect(result.signals[0].template.scanKeywords).toEqual(["클라우드 보안", "AWS", "IAM"]);
   });
+
+  it("summarizes this week demand against the previous week", () => {
+    const result = buildMarketSignals(
+      [
+        {
+          company: "최근회사",
+          title: "AI 보안 담당자",
+          description: "LLM 프롬프트 보안",
+          matchedKeywords: ["AI"],
+          firstSeenAt: "2026-06-30T00:00:00Z"
+        },
+        {
+          company: "이전회사",
+          title: "보안관제 담당자",
+          description: "SIEM 탐지",
+          matchedKeywords: ["SIEM"],
+          firstSeenAt: "2026-06-20T00:00:00Z"
+        }
+      ],
+      new Date("2026-07-01T00:00:00Z")
+    );
+
+    expect(result.weeklyTrend).toEqual({
+      currentWeekJobs: 1,
+      previousWeekJobs: 1,
+      direction: "flat",
+      summary: "최근 7일 공고 1건, 이전 7일 공고 1건으로 비슷한 흐름입니다."
+    });
+  });
 });

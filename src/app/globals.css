@@ -201,6 +201,35 @@ h3 {
   padding: 0;
 }
 
+.weekly-trend {
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  line-height: 1.45;
+  margin-top: 16px;
+  padding: 12px;
+}
+
+.weekly-trend strong {
+  flex: 0 0 auto;
+}
+
+.weekly-trend span {
+  color: var(--muted);
+  text-align: right;
+}
+
+.weekly-trend-up {
+  border-color: #93c5fd;
+}
+
+.weekly-trend-down {
+  border-color: #f1b4ad;
+}
+
 .market-list li {
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -569,6 +598,15 @@ pre {
 
   .market-list {
     grid-template-columns: 1fr;
+  }
+
+  .weekly-trend {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .weekly-trend span {
+    text-align: left;
   }
 
   .template-grid {

@@ -168,6 +168,10 @@ export default function Home() {
               </div>
               <span className="scan-id">최근 공고 {marketSignals.sampleSize}건 기준</span>
             </div>
+            <div className={`weekly-trend weekly-trend-${marketSignals.weeklyTrend.direction}`}>
+              <strong>주간 수요 추세</strong>
+              <span>{marketSignals.weeklyTrend.summary}</span>
+            </div>
             <ul className="market-list">
               {recommendedSignals.map((signal) => (
                 <li key={signal.area}>
