@@ -81,6 +81,35 @@ scripts/start-vibecoding-local.sh
 
 스크립트는 `apps/vibecoding/.env.local`을 읽고, 가상환경이 없으면 만들고, 마이그레이션을 적용한 뒤 `http://127.0.0.1:8000/login`에서 대시보드를 띄웁니다.
 
+## 로그인 시 자동 실행
+
+맥 로그인 때 자동으로 대시보드를 띄우려면 상위 저장소 루트에서 LaunchAgent를 등록합니다.
+
+```bash
+scripts/install-vibecoding-launch-agent.sh
+```
+
+등록 후에는 로그인할 때마다 `scripts/start-vibecoding-local.sh`가 실행되고, `http://127.0.0.1:8000/login`에서 대시보드를 확인할 수 있습니다.
+
+macOS는 `Documents` 아래 파일을 백그라운드 프로세스가 직접 읽는 것을 막을 수 있습니다. 그래서 설치 스크립트는 자동 실행용 복사본을 아래 위치에 만들고, LaunchAgent는 그 복사본을 실행합니다.
+
+```text
+~/Library/Application Support/vibecoding/runtime
+```
+
+자동 실행 로그는 아래 위치에 남습니다.
+
+```text
+~/Library/Logs/vibecoding/launch-agent.out.log
+~/Library/Logs/vibecoding/launch-agent.err.log
+```
+
+자동 실행을 끄려면 다음을 실행합니다.
+
+```bash
+scripts/uninstall-vibecoding-launch-agent.sh
+```
+
 ## 동작 확인
 
 ```bash
