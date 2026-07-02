@@ -25,7 +25,7 @@ describe("runScan", () => {
     expect(scan.findings.some((finding) => finding.filePath.includes("node_modules"))).toBe(false);
   });
 
-  it("keeps the selected market signal as scan focus metadata", () => {
+  it("does not attach job signal metadata to repository scan results", () => {
     const scan = runScan({
       repository: {
         owner: "example",
@@ -40,12 +40,8 @@ describe("runScan", () => {
         keywords: ["클라우드 보안", "AWS", "IAM"],
         checklist: ["권한 상승이 가능한 IAM 정책과 장기 접근 키를 확인합니다."]
       }
-    });
+    } as Parameters<typeof runScan>[0] & { focus: unknown });
 
-    expect(scan.focus).toEqual({
-      area: "클라우드 권한과 비밀값 노출",
-      keywords: ["클라우드 보안", "AWS", "IAM"],
-      checklist: ["권한 상승이 가능한 IAM 정책과 장기 접근 키를 확인합니다."]
-    });
+    expect("focus" in scan).toBe(false);
   });
 });

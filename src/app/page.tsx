@@ -1,12 +1,9 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import type { ScanResult, Severity } from "@/lib/scanner/types";
-import type { MarketSignal, MarketSignalsReport } from "@/lib/marketSignals/signals";
 
 const severities: Severity[] = ["critical", "high", "medium", "low", "info"];
-const vibecodingDashboardUrl =
-  process.env.NEXT_PUBLIC_VIBECODING_URL ?? "http://127.0.0.1:8000/login";
 
 const severityLabels: Record<Severity, string> = {
   critical: "Critical",
@@ -20,8 +17,6 @@ type ScanResponse = {
   scan?: ScanResult;
   error?: string;
 };
-
-type MarketSignalsResponse = MarketSignalsReport;
 
 function formatLocation(filePath: string, lineStart?: number, lineEnd?: number): string {
   if (lineStart === undefined) {
@@ -38,45 +33,12 @@ function formatLocation(filePath: string, lineStart?: number, lineEnd?: number):
 export default function Home() {
   const [repositoryUrl, setRepositoryUrl] = useState("");
   const [scan, setScan] = useState<ScanResult | null>(null);
-  const [marketSignals, setMarketSignals] = useState<MarketSignalsResponse | null>(null);
-  const [selectedSignalArea, setSelectedSignalArea] = useState<string | null>(null);
-  const [appliedSignal, setAppliedSignal] = useState<MarketSignal | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
 
   const hasFindings = Boolean(scan?.findings.length);
   const findingCount = scan?.findings.length ?? 0;
   const reportJson = useMemo(() => (scan ? JSON.stringify(scan, null, 2) : ""), [scan]);
-  const recommendedSignals = marketSignals?.signals.slice(0, 3) ?? [];
-  const selectedSignal: MarketSignal | null =
-    recommendedSignals.find((signal) => signal.area === selectedSignalArea) ?? recommendedSignals[0] ?? null;
-
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadMarketSignals() {
-      try {
-        const response = await fetch("/api/market-signals");
-        if (!response.ok) {
-          return;
-        }
-        const data = (await response.json()) as MarketSignalsResponse;
-        if (isMounted) {
-          setMarketSignals(data);
-        }
-      } catch {
-        if (isMounted) {
-          setMarketSignals(null);
-        }
-      }
-    }
-
-    void loadMarketSignals();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -87,16 +49,7 @@ export default function Home() {
       const response = await fetch("/api/scans", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          repositoryUrl,
-          focus: appliedSignal
-            ? {
-                area: appliedSignal.area,
-                keywords: appliedSignal.template.scanKeywords,
-                checklist: appliedSignal.template.checklist
-              }
-            : undefined
-        })
+        body: JSON.stringify({ repositoryUrl })
       });
       const data = (await response.json()) as ScanResponse;
 
@@ -126,12 +79,7 @@ export default function Home() {
             <p className="eyebrow">AI Security Inspector</p>
             <h1 id="scanner-title">Repository scan</h1>
           </div>
-          <div className="workspace-actions">
-            <a className="dashboard-link" href={vibecodingDashboardUrl}>
-              Job dashboard
-            </a>
-            <p className="workspace-note">Public GitHub repositories only</p>
-          </div>
+          <p className="workspace-note">Public GitHub repositories only</p>
         </header>
 
         <form className="scan-form" onSubmit={handleSubmit}>
@@ -157,70 +105,6 @@ export default function Home() {
           <div className="status-message status-error" role="alert">
             {error}
           </div>
-        ) : null}
-
-        {marketSignals && marketSignals.signals.length ? (
-          <section className="panel market-panel" aria-labelledby="market-title">
-            <div className="panel-heading">
-              <div>
-                <p className="panel-kicker">Market signals</p>
-                <h2 id="market-title">시장 수요 기반 추천 점검</h2>
-              </div>
-              <span className="scan-id">최근 공고 {marketSignals.sampleSize}건 기준</span>
-            </div>
-            <div className={`weekly-trend weekly-trend-${marketSignals.weeklyTrend.direction}`}>
-              <strong>주간 수요 추세</strong>
-              <span>{marketSignals.weeklyTrend.summary}</span>
-            </div>
-            <ul className="market-list">
-              {recommendedSignals.map((signal) => (
-                <li key={signal.area}>
-                  <button
-                    aria-pressed={selectedSignal?.area === signal.area}
-                    className="market-signal-button"
-                    type="button"
-                    onClick={() => setSelectedSignalArea(signal.area)}
-                  >
-                    <strong>{signal.area}</strong>
-                    <span>{signal.keywords.join(", ")}</span>
-                    <small>수요 {signal.jobCount}개 회사 · 점수 {signal.score}</small>
-                  </button>
-                </li>
-              ))}
-            </ul>
-            {selectedSignal ? (
-              <section className="market-template" aria-labelledby="market-template-title">
-                <div>
-                  <p className="panel-kicker">Recommended checklist</p>
-                  <h3 id="market-template-title">추천 점검 템플릿</h3>
-                  <p className="market-trend">{selectedSignal.trend}</p>
-                </div>
-                <p>{selectedSignal.template.purpose}</p>
-                <dl className="template-grid">
-                  <div>
-                    <dt>추천 키워드</dt>
-                    <dd>{selectedSignal.template.scanKeywords.join(", ")}</dd>
-                  </div>
-                  <div>
-                    <dt>확인 대상</dt>
-                    <dd>{selectedSignal.template.reviewTargets.join(", ")}</dd>
-                  </div>
-                </dl>
-                <ul className="template-checklist">
-                  {selectedSignal.template.checklist.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-                <button
-                  className="apply-template-button"
-                  type="button"
-                  onClick={() => setAppliedSignal(selectedSignal)}
-                >
-                  이 기준으로 스캔 준비
-                </button>
-              </section>
-            ) : null}
-          </section>
         ) : null}
 
         {scan ? (
@@ -249,14 +133,6 @@ export default function Home() {
                 {findingCount === 1 ? "1 finding" : `${findingCount} findings`} on{" "}
                 {scan.repository.defaultBranch}
               </p>
-
-              {scan.focus ? (
-                <div className="scan-focus" role="status">
-                  <h3>적용된 점검 기준</h3>
-                  <p>{scan.focus.area}</p>
-                  <span>{scan.focus.keywords.join(", ")}</span>
-                </div>
-              ) : null}
 
               {scan.warnings.length ? (
                 <div className="warnings" role="status" aria-label="Scan warnings">
