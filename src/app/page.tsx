@@ -26,6 +26,33 @@ type ScanHistoryResponse = {
   error?: string;
 };
 
+type GitHubInstallation = {
+  id: number;
+  account: string;
+  repositories: number;
+  repositorySelection: string;
+  targetType: string;
+};
+
+type GitHubInstallationsResponse = {
+  installations?: GitHubInstallation[];
+  error?: string;
+};
+
+type GitHubRepository = {
+  id: number;
+  name: string;
+  fullName: string;
+  private: boolean;
+  defaultBranch: string;
+  url: string;
+};
+
+type GitHubRepositoriesResponse = {
+  repositories?: GitHubRepository[];
+  error?: string;
+};
+
 function formatLocation(filePath: string, lineStart?: number, lineEnd?: number): string {
   if (lineStart === undefined) {
     return filePath;
@@ -50,6 +77,14 @@ export default function Home() {
   const [issueUrl, setIssueUrl] = useState<string | null>(null);
   const [isCreatingIssue, setIsCreatingIssue] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
+  const [installations, setInstallations] = useState<GitHubInstallation[]>([]);
+  const [selectedInstallationId, setSelectedInstallationId] = useState("");
+  const [repositories, setRepositories] = useState<GitHubRepository[]>([]);
+  const [selectedRepositoryUrl, setSelectedRepositoryUrl] = useState("");
+  const [githubStatus, setGithubStatus] = useState<string | null>(null);
+  const [repositoryStatus, setRepositoryStatus] = useState<string | null>(null);
+  const [isLoadingInstallations, setIsLoadingInstallations] = useState(false);
+  const [isLoadingRepositories, setIsLoadingRepositories] = useState(false);
 
   const hasFindings = Boolean(scan?.findings.length);
   const findingCount = scan?.findings.length ?? 0;
@@ -78,12 +113,86 @@ export default function Home() {
       }
     }
 
+    async function loadInstallations() {
+      setIsLoadingInstallations(true);
+      try {
+        const response = await fetch("/api/github/installations");
+        const data = (await response.json()) as GitHubInstallationsResponse;
+        if (!response.ok) {
+          throw new Error(data.error ?? "Could not load GitHub App installations.");
+        }
+        if (isMounted) {
+          const loadedInstallations = data.installations ?? [];
+          setInstallations(loadedInstallations);
+          setGithubStatus(loadedInstallations.length ? null : "No GitHub App installations found.");
+        }
+      } catch (loadError) {
+        if (isMounted) {
+          const message =
+            loadError instanceof Error ? loadError.message : "Could not load GitHub App installations.";
+          setGithubStatus(message);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingInstallations(false);
+        }
+      }
+    }
+
     void loadHistory();
+    void loadInstallations();
 
     return () => {
       isMounted = false;
     };
   }, []);
+
+  async function loadRepositories(nextInstallationId: string) {
+    setRepositoryStatus(null);
+    setIsLoadingRepositories(true);
+
+    try {
+      const response = await fetch(
+        `/api/github/repositories?installationId=${encodeURIComponent(nextInstallationId)}`
+      );
+      const data = (await response.json()) as GitHubRepositoriesResponse;
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Could not load GitHub App repositories.");
+      }
+
+      const loadedRepositories = data.repositories ?? [];
+      setRepositories(loadedRepositories);
+      setRepositoryStatus(loadedRepositories.length ? null : "No repositories are available for this installation.");
+    } catch (loadError) {
+      const message = loadError instanceof Error ? loadError.message : "Could not load GitHub App repositories.";
+      setRepositories([]);
+      setRepositoryStatus(message);
+    } finally {
+      setIsLoadingRepositories(false);
+    }
+  }
+
+  function handleInstallationSelect(nextInstallationId: string) {
+    setSelectedInstallationId(nextInstallationId);
+    setInstallationId(nextInstallationId);
+    setSelectedRepositoryUrl("");
+    setRepositories([]);
+    setRepositoryStatus(null);
+
+    if (nextInstallationId) {
+      void loadRepositories(nextInstallationId);
+    }
+  }
+
+  function handleRepositorySelect(nextRepositoryUrl: string) {
+    setSelectedRepositoryUrl(nextRepositoryUrl);
+
+    const repository = repositories.find((candidate) => candidate.url === nextRepositoryUrl);
+    if (repository) {
+      setRepositoryUrl(repository.url);
+    }
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -168,7 +277,7 @@ export default function Home() {
             <p className="eyebrow">AI Security Inspector</p>
             <h1 id="scanner-title">Repository scan</h1>
           </div>
-          <p className="workspace-note">Public GitHub repositories only</p>
+          <p className="workspace-note">Public repositories or GitHub App access</p>
         </header>
 
         <form className="scan-form" onSubmit={handleSubmit}>
@@ -188,6 +297,59 @@ export default function Home() {
               {isScanning ? "Scanning..." : "Scan repository"}
             </button>
           </div>
+          <section className="github-picker" aria-labelledby="github-picker-title">
+            <div className="github-picker-heading">
+              <h2 id="github-picker-title">GitHub App repository picker</h2>
+              {isLoadingInstallations ? <span>Loading installations</span> : null}
+            </div>
+            {githubStatus ? (
+              <p className="picker-status" role="status">
+                {githubStatus}
+              </p>
+            ) : null}
+            {installations.length ? (
+              <div className="picker-grid">
+                <div className="picker-field">
+                  <label htmlFor="github-installation">GitHub App installation</label>
+                  <select
+                    id="github-installation"
+                    value={selectedInstallationId}
+                    onChange={(event) => handleInstallationSelect(event.target.value)}
+                  >
+                    <option value="">Select installation</option>
+                    {installations.map((installation) => (
+                      <option key={installation.id} value={installation.id}>
+                        {installation.account} · {installation.repositories} repositories
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="picker-field">
+                  <label htmlFor="github-repository">GitHub App repository</label>
+                  <select
+                    id="github-repository"
+                    value={selectedRepositoryUrl}
+                    onChange={(event) => handleRepositorySelect(event.target.value)}
+                    disabled={!selectedInstallationId || isLoadingRepositories || !repositories.length}
+                  >
+                    <option value="">
+                      {isLoadingRepositories ? "Loading repositories" : "Select repository"}
+                    </option>
+                    {repositories.map((repository) => (
+                      <option key={repository.id} value={repository.url}>
+                        {repository.fullName} · {repository.private ? "private" : "public"}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            ) : null}
+            {repositoryStatus ? (
+              <p className="picker-status" role="status">
+                {repositoryStatus}
+              </p>
+            ) : null}
+          </section>
           <div className="secondary-input-row">
             <label htmlFor="installation-id">GitHub App installation ID</label>
             <input
