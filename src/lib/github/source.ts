@@ -12,7 +12,14 @@ const GITHUB_JSON_HEADERS = { Accept: "application/vnd.github+json" };
 const RATE_LIMIT_MESSAGE = "GitHub rate limit reached. Try again later.";
 const MAX_FILES_TO_FETCH = 200;
 
-export async function fetchRepositoryFiles(repository: RepositoryRef): Promise<{
+type FetchRepositoryFilesOptions = {
+  accessToken?: string;
+};
+
+export async function fetchRepositoryFiles(
+  repository: RepositoryRef,
+  options: FetchRepositoryFilesOptions = {}
+): Promise<{
   repository: Required<RepositoryRef>;
   files: RepositoryFile[];
   warnings: ScanWarning[];
@@ -20,8 +27,9 @@ export async function fetchRepositoryFiles(repository: RepositoryRef): Promise<{
   const encodedOwner = encodeUrlSegment(repository.owner);
   const encodedName = encodeUrlSegment(repository.name);
   const repositoryApiUrl = `https://api.github.com/repos/${encodedOwner}/${encodedName}`;
+  const jsonHeaders = githubJsonHeaders(options.accessToken);
   const metadataResponse = await fetch(repositoryApiUrl, {
-    headers: GITHUB_JSON_HEADERS
+    headers: jsonHeaders
   });
 
   if (metadataResponse.status === 404) {
@@ -38,7 +46,7 @@ export async function fetchRepositoryFiles(repository: RepositoryRef): Promise<{
   const defaultBranch = metadata.default_branch;
   const treeResponse = await fetch(
     `${repositoryApiUrl}/git/trees/${encodeUrlSegment(defaultBranch)}?recursive=1`,
-    { headers: GITHUB_JSON_HEADERS }
+    { headers: jsonHeaders }
   );
 
   throwIfRateLimited(treeResponse);
@@ -63,9 +71,10 @@ export async function fetchRepositoryFiles(repository: RepositoryRef): Promise<{
   const files: RepositoryFile[] = [];
 
   for (const item of candidateFiles.slice(0, MAX_FILES_TO_FETCH)) {
-    const rawResponse = await fetch(
-      `https://raw.githubusercontent.com/${encodedOwner}/${encodedName}/${encodeUrlSegment(defaultBranch)}/${encodePathSegments(item.path)}`
-    );
+    const rawUrl = `https://raw.githubusercontent.com/${encodedOwner}/${encodedName}/${encodeUrlSegment(defaultBranch)}/${encodePathSegments(item.path)}`;
+    const rawResponse = options.accessToken
+      ? await fetch(rawUrl, { headers: { Authorization: `Bearer ${options.accessToken}` } })
+      : await fetch(rawUrl);
 
     throwIfRateLimited(rawResponse);
 
@@ -98,6 +107,12 @@ function throwIfRateLimited(response: Response): void {
   if (response.status === 403 || response.status === 429) {
     throw new Error(RATE_LIMIT_MESSAGE);
   }
+}
+
+function githubJsonHeaders(accessToken?: string): HeadersInit {
+  return accessToken
+    ? { ...GITHUB_JSON_HEADERS, Authorization: `Bearer ${accessToken}` }
+    : GITHUB_JSON_HEADERS;
 }
 
 function encodeUrlSegment(segment: string): string {

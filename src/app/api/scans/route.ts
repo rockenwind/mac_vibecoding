@@ -1,5 +1,8 @@
 import { parseGitHubRepositoryUrl } from "@/lib/github/url";
 import { fetchRepositoryFiles } from "@/lib/github/source";
+import { createGitHubAppJwt } from "@/lib/github/appAuth";
+import { createInstallationAccessToken } from "@/lib/github/appClient";
+import { readGitHubAppConfig } from "@/lib/github/appConfig";
 import { runScan } from "@/lib/scanner/scan";
 import {
   compareScanResults,
@@ -20,14 +23,18 @@ export async function GET(): Promise<Response> {
 
 export async function POST(request: Request): Promise<Response> {
   try {
-    const body = (await request.json()) as { repositoryUrl?: unknown };
+    const body = (await request.json()) as { repositoryUrl?: unknown; installationId?: unknown };
 
     if (typeof body.repositoryUrl !== "string") {
       return Response.json({ error: "repositoryUrl must be a string." }, { status: 400 });
     }
 
     const repository = parseGitHubRepositoryUrl(body.repositoryUrl);
-    const source = await fetchRepositoryFiles(repository);
+    const accessToken = await getInstallationAccessToken(body.installationId);
+    const source = await fetchRepositoryFiles(
+      repository,
+      accessToken ? { accessToken } : undefined
+    );
     const scan = runScan(source);
     const existingHistory = await readScanHistory();
     const previousScan = findPreviousScan(scan, existingHistory);
@@ -40,4 +47,23 @@ export async function POST(request: Request): Promise<Response> {
     const status = message.includes("GitHub rate limit") ? 429 : 400;
     return Response.json({ error: message }, { status });
   }
+}
+
+async function getInstallationAccessToken(installationId: unknown): Promise<string | null> {
+  if (installationId === undefined || installationId === null || installationId === "") {
+    return null;
+  }
+
+  const parsedInstallationId = Number(installationId);
+  if (!Number.isInteger(parsedInstallationId) || parsedInstallationId <= 0) {
+    throw new Error("installationId must be a positive number.");
+  }
+
+  const config = readGitHubAppConfig();
+  if (!config.configured) {
+    throw new Error("GitHub App is not configured.");
+  }
+
+  const jwt = createGitHubAppJwt(config);
+  return createInstallationAccessToken(jwt, parsedInstallationId);
 }

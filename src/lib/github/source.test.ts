@@ -63,6 +63,55 @@ describe("fetchRepositoryFiles", () => {
     ).rejects.toThrow("GitHub rate limit reached. Try again later.");
   });
 
+  it("adds authorization headers when an access token is provided", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ default_branch: "main" }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          tree: [
+            {
+              path: "src/private.ts",
+              type: "blob",
+              size: 12,
+              url: "https://api.github.com/blob"
+            }
+          ]
+        })
+      )
+      .mockResolvedValueOnce(textResponse("const privateRepo = true;"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fetchRepositoryFiles(
+      {
+        owner: "example",
+        name: "private-repo",
+        url: "https://github.com/example/private-repo"
+      },
+      { accessToken: "installation-token" }
+    );
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "https://api.github.com/repos/example/private-repo",
+      {
+        headers: {
+          Accept: "application/vnd.github+json",
+          Authorization: "Bearer installation-token"
+        }
+      }
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "https://raw.githubusercontent.com/example/private-repo/main/src/private.ts",
+      {
+        headers: {
+          Authorization: "Bearer installation-token"
+        }
+      }
+    );
+  });
+
   it("warns when more than 200 matching files are available", async () => {
     const tree = Array.from({ length: 201 }, (_, index) => ({
       path: `src/file-${index}.ts`,

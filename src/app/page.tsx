@@ -40,6 +40,7 @@ function formatLocation(filePath: string, lineStart?: number, lineEnd?: number):
 
 export default function Home() {
   const [repositoryUrl, setRepositoryUrl] = useState("");
+  const [installationId, setInstallationId] = useState("");
   const [scan, setScan] = useState<ScanResult | null>(null);
   const [comparison, setComparison] = useState<ScanComparison | null>(null);
   const [scanHistory, setScanHistory] = useState<ScanHistoryEntry[]>([]);
@@ -90,7 +91,10 @@ export default function Home() {
       const response = await fetch("/api/scans", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repositoryUrl })
+        body: JSON.stringify({
+          repositoryUrl,
+          ...(installationId.trim() ? { installationId: Number(installationId) } : {})
+        })
       });
       const data = (await response.json()) as ScanResponse;
 
@@ -147,6 +151,19 @@ export default function Home() {
             <button type="submit" disabled={isScanning}>
               {isScanning ? "Scanning..." : "Scan repository"}
             </button>
+          </div>
+          <div className="secondary-input-row">
+            <label htmlFor="installation-id">GitHub App installation ID</label>
+            <input
+              id="installation-id"
+              name="installationId"
+              type="number"
+              inputMode="numeric"
+              min="1"
+              placeholder="Optional for private repositories"
+              value={installationId}
+              onChange={(event) => setInstallationId(event.target.value)}
+            />
           </div>
         </form>
 
