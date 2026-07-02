@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
-import type { ScanResult, Severity } from "@/lib/scanner/types";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import type { Finding, ScanResult, Severity } from "@/lib/scanner/types";
+import type { ScanComparison, ScanHistoryEntry } from "@/lib/scanHistory/types";
 
 const severities: Severity[] = ["critical", "high", "medium", "low", "info"];
 
@@ -15,6 +16,13 @@ const severityLabels: Record<Severity, string> = {
 
 type ScanResponse = {
   scan?: ScanResult;
+  history?: ScanHistoryEntry;
+  comparison?: ScanComparison;
+  error?: string;
+};
+
+type ScanHistoryResponse = {
+  history?: ScanHistoryEntry[];
   error?: string;
 };
 
@@ -33,12 +41,45 @@ function formatLocation(filePath: string, lineStart?: number, lineEnd?: number):
 export default function Home() {
   const [repositoryUrl, setRepositoryUrl] = useState("");
   const [scan, setScan] = useState<ScanResult | null>(null);
+  const [comparison, setComparison] = useState<ScanComparison | null>(null);
+  const [scanHistory, setScanHistory] = useState<ScanHistoryEntry[]>([]);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
 
   const hasFindings = Boolean(scan?.findings.length);
   const findingCount = scan?.findings.length ?? 0;
   const reportJson = useMemo(() => (scan ? JSON.stringify(scan, null, 2) : ""), [scan]);
+  const recentHistory = scanHistory.slice(0, 5);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadHistory() {
+      try {
+        const response = await fetch("/api/scans");
+        const data = (await response.json()) as ScanHistoryResponse;
+        if (!response.ok) {
+          throw new Error(data.error ?? "Could not load scan history.");
+        }
+        if (isMounted) {
+          setScanHistory(data.history ?? []);
+          setHistoryError(null);
+        }
+      } catch (loadError) {
+        if (isMounted) {
+          const message = loadError instanceof Error ? loadError.message : "Could not load scan history.";
+          setHistoryError(message);
+        }
+      }
+    }
+
+    void loadHistory();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -62,9 +103,17 @@ export default function Home() {
       }
 
       setScan(data.scan);
+      setComparison(data.comparison ?? null);
+      if (data.history) {
+        setScanHistory((currentHistory) => [
+          data.history as ScanHistoryEntry,
+          ...currentHistory.filter((entry) => entry.scan.id !== data.history?.scan.id)
+        ]);
+      }
     } catch (scanError) {
       const message = scanError instanceof Error ? scanError.message : "Scan failed.";
       setScan(null);
+      setComparison(null);
       setError(message);
     } finally {
       setIsScanning(false);
@@ -107,6 +156,36 @@ export default function Home() {
           </div>
         ) : null}
 
+        <section className="panel history-panel" aria-labelledby="history-title">
+          <div className="panel-heading">
+            <h2 id="history-title">Recent scans</h2>
+            <span className="scan-id">{recentHistory.length} saved</span>
+          </div>
+          {historyError ? (
+            <p className="history-error" role="status">
+              {historyError}
+            </p>
+          ) : recentHistory.length ? (
+            <ul className="history-list">
+              {recentHistory.map((entry) => (
+                <li key={`${entry.savedAt}-${entry.scan.id}`}>
+                  <div>
+                    <strong>
+                      {entry.scan.repository.owner}/{entry.scan.repository.name}
+                    </strong>
+                    <span>{entry.scan.id}</span>
+                  </div>
+                  <small>
+                    {entry.scan.findings.length} findings · {entry.scan.summary.critical + entry.scan.summary.high} high risk
+                  </small>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="empty-state">No saved scans yet.</p>
+          )}
+        </section>
+
         {scan ? (
           <div className="results-grid">
             <section className="panel summary-panel" aria-labelledby="summary-title">
@@ -133,6 +212,28 @@ export default function Home() {
                 {findingCount === 1 ? "1 finding" : `${findingCount} findings`} on{" "}
                 {scan.repository.defaultBranch}
               </p>
+
+              {comparison ? (
+                <section className="comparison-panel" aria-labelledby="comparison-title">
+                  <h3 id="comparison-title">Comparison</h3>
+                  <div className="comparison-grid">
+                    <div>
+                      <span>New</span>
+                      <strong>{comparison.newFindings.length}</strong>
+                    </div>
+                    <div>
+                      <span>Resolved</span>
+                      <strong>{comparison.resolvedFindings.length}</strong>
+                    </div>
+                    <div>
+                      <span>Unchanged</span>
+                      <strong>{comparison.unchangedFindings.length}</strong>
+                    </div>
+                  </div>
+                  <ComparisonList title="New findings" findings={comparison.newFindings} />
+                  <ComparisonList title="Resolved findings" findings={comparison.resolvedFindings} />
+                </section>
+              ) : null}
 
               {scan.warnings.length ? (
                 <div className="warnings" role="status" aria-label="Scan warnings">
@@ -206,5 +307,22 @@ export default function Home() {
         )}
       </section>
     </main>
+  );
+}
+
+function ComparisonList({ title, findings }: { title: string; findings: Finding[] }) {
+  if (!findings.length) {
+    return null;
+  }
+
+  return (
+    <div className="comparison-list">
+      <h4>{title}</h4>
+      <ul>
+        {findings.slice(0, 3).map((finding) => (
+          <li key={finding.id}>{finding.title}</li>
+        ))}
+      </ul>
+    </div>
   );
 }
