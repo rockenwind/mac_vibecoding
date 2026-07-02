@@ -26,12 +26,14 @@ body {
 
 button,
 input,
+select,
 textarea {
   font: inherit;
 }
 
 button,
-input {
+input,
+select {
   min-height: 44px;
 }
 
@@ -53,6 +55,7 @@ button:disabled {
 
 button:focus-visible,
 input:focus-visible,
+select:focus-visible,
 summary:focus-visible,
 a:focus-visible {
   outline: 3px solid rgba(37, 99, 235, 0.22);
@@ -166,6 +169,62 @@ h3 {
   color: var(--text);
   min-width: 0;
   padding: 0 12px;
+}
+
+.github-picker {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin-top: 14px;
+  padding: 14px;
+}
+
+.github-picker-heading {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.github-picker-heading span,
+.picker-status {
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.picker-status {
+  margin: 0;
+}
+
+.picker-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+}
+
+.picker-field {
+  display: grid;
+  gap: 8px;
+}
+
+.picker-field label {
+  margin: 0;
+}
+
+.picker-field select {
+  background: #ffffff;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  color: var(--text);
+  min-width: 0;
+  padding: 0 12px;
+}
+
+.picker-field select:disabled {
+  color: var(--muted);
+  cursor: wait;
+  opacity: 0.72;
 }
 
 .status-message {
@@ -549,9 +608,14 @@ pre {
 
   .workspace-header,
   .input-row,
+  .github-picker-heading,
   .panel-heading {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .picker-grid {
+    grid-template-columns: 1fr;
   }
 
   button {

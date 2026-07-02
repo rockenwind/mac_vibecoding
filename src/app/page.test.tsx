@@ -8,6 +8,39 @@ describe("Home", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = input.toString();
+        if (url === "/api/github/installations") {
+          return {
+            ok: true,
+            json: async () => ({
+              installations: [
+                {
+                  id: 123,
+                  account: "example",
+                  repositories: 1,
+                  repositorySelection: "selected",
+                  targetType: "Organization"
+                }
+              ]
+            })
+          };
+        }
+        if (url === "/api/github/repositories?installationId=123") {
+          return {
+            ok: true,
+            json: async () => ({
+              repositories: [
+                {
+                  id: 1,
+                  name: "repo",
+                  fullName: "example/repo",
+                  private: true,
+                  defaultBranch: "main",
+                  url: "https://github.com/example/repo"
+                }
+              ]
+            })
+          };
+        }
         if (url === "/api/scans" && !init) {
           return {
             ok: true,
@@ -125,6 +158,43 @@ describe("Home", () => {
     expect(await screen.findByText("Recent scans")).toBeInTheDocument();
     expect(screen.getAllByText("example/repo").length).toBeGreaterThan(0);
     expect(screen.getByText("scan_previous")).toBeInTheDocument();
+  });
+
+  it("selects a GitHub App repository and fills scan inputs", async () => {
+    render(<Home />);
+
+    const installationSelect = await screen.findByLabelText("GitHub App installation");
+    fireEvent.change(installationSelect, { target: { value: "123" } });
+
+    const repositorySelect = await screen.findByLabelText("GitHub App repository");
+    fireEvent.change(repositorySelect, { target: { value: "https://github.com/example/repo" } });
+
+    expect(screen.getByLabelText("GitHub repository URL")).toHaveValue("https://github.com/example/repo");
+    expect(screen.getByLabelText("GitHub App installation ID")).toHaveValue(123);
+  });
+
+  it("shows GitHub App configuration status when installations cannot be loaded", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = input.toString();
+        if (url === "/api/github/installations") {
+          return {
+            ok: false,
+            status: 503,
+            json: async () => ({ error: "GitHub App is not configured." })
+          };
+        }
+        if (url === "/api/scans") {
+          return { ok: true, json: async () => ({ history: [] }) };
+        }
+        throw new Error(`Unexpected request: ${url}`);
+      })
+    );
+
+    render(<Home />);
+
+    expect(await screen.findByText("GitHub App is not configured.")).toBeInTheDocument();
   });
 
   it("does not show Security and Network Jobs content", async () => {
