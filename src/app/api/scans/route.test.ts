@@ -6,7 +6,10 @@ const mocks = vi.hoisted(() => ({
   readScanHistory: vi.fn(),
   recordScan: vi.fn(),
   findPreviousScan: vi.fn(),
-  compareScanResults: vi.fn()
+  compareScanResults: vi.fn(),
+  readGitHubAppConfig: vi.fn(),
+  createGitHubAppJwt: vi.fn(),
+  createInstallationAccessToken: vi.fn()
 }));
 
 vi.mock("@/lib/github/source", () => ({
@@ -18,6 +21,18 @@ vi.mock("@/lib/scanHistory/store", () => ({
   recordScan: mocks.recordScan,
   findPreviousScan: mocks.findPreviousScan,
   compareScanResults: mocks.compareScanResults
+}));
+
+vi.mock("@/lib/github/appConfig", () => ({
+  readGitHubAppConfig: mocks.readGitHubAppConfig
+}));
+
+vi.mock("@/lib/github/appAuth", () => ({
+  createGitHubAppJwt: mocks.createGitHubAppJwt
+}));
+
+vi.mock("@/lib/github/appClient", () => ({
+  createInstallationAccessToken: mocks.createInstallationAccessToken
 }));
 
 describe("POST /api/scans", () => {
@@ -48,6 +63,14 @@ describe("POST /api/scans", () => {
       resolvedFindings: [],
       unchangedFindings: []
     }));
+    mocks.readGitHubAppConfig.mockReturnValue({
+      configured: true,
+      appId: "12345",
+      privateKey: "private-key",
+      clientId: undefined
+    });
+    mocks.createGitHubAppJwt.mockReturnValue("jwt-token");
+    mocks.createInstallationAccessToken.mockResolvedValue("installation-token");
   });
 
   it("returns a scan result for a valid GitHub URL", async () => {
@@ -86,6 +109,45 @@ describe("POST /api/scans", () => {
 
     expect(response.status).toBe(200);
     expect(body.scan.focus).toBeUndefined();
+  });
+
+  it("uses a GitHub App installation token when installationId is provided", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/scans", {
+        method: "POST",
+        body: JSON.stringify({
+          repositoryUrl: "https://github.com/example/repo",
+          installationId: 123
+        })
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.createInstallationAccessToken).toHaveBeenCalledWith("jwt-token", 123);
+    expect(mocks.fetchRepositoryFiles).toHaveBeenCalledWith(
+      {
+        owner: "example",
+        name: "repo",
+        url: "https://github.com/example/repo"
+      },
+      { accessToken: "installation-token" }
+    );
+  });
+
+  it("returns 400 for an invalid installationId", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/scans", {
+        method: "POST",
+        body: JSON.stringify({
+          repositoryUrl: "https://github.com/example/repo",
+          installationId: "abc"
+        })
+      })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe("installationId must be a positive number.");
   });
 
   it("returns 400 for an invalid URL", async () => {

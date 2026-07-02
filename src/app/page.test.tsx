@@ -191,4 +191,29 @@ describe("Home", () => {
     });
     expect(screen.queryByText("적용된 점검 기준")).not.toBeInTheDocument();
   });
+
+  it("submits an optional GitHub App installation ID", async () => {
+    const fetchMock = vi.mocked(fetch);
+    render(<Home />);
+
+    fireEvent.change(screen.getByLabelText("GitHub repository URL"), {
+      target: { value: "https://github.com/example/repo" }
+    });
+    fireEvent.change(screen.getByLabelText("GitHub App installation ID"), {
+      target: { value: "123" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Scan repository" }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Possible exposed credential").length).toBeGreaterThan(0);
+    });
+
+    const scanRequest = fetchMock.mock.calls.find(
+      ([input, init]) => input.toString() === "/api/scans" && init?.method === "POST"
+    );
+    expect(JSON.parse(scanRequest?.[1]?.body as string)).toEqual({
+      repositoryUrl: "https://github.com/example/repo",
+      installationId: 123
+    });
+  });
 });
