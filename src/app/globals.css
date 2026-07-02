@@ -272,6 +272,7 @@ h3 {
 
 .report-actions {
   display: flex;
+  gap: 10px;
   justify-content: flex-end;
   margin-bottom: 12px;
 }
@@ -290,6 +291,21 @@ h3 {
 
 .report-link:hover {
   background: #eef2f7;
+}
+
+.issue-status,
+.issue-error {
+  line-height: 1.45;
+  margin: 0 0 12px;
+}
+
+.issue-status a {
+  color: #166534;
+  font-weight: 700;
+}
+
+.issue-error {
+  color: var(--critical);
 }
 
 .scan-id {

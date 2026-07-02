@@ -15,6 +15,16 @@ export type GitHubInstallationRepository = {
   url: string;
 };
 
+export type GitHubIssueInput = {
+  title: string;
+  body: string;
+  labels: string[];
+};
+
+export type GitHubIssueResult = {
+  url: string;
+};
+
 type Fetch = typeof fetch;
 
 const GITHUB_API_VERSION = "2022-11-28";
@@ -112,6 +122,35 @@ export async function listInstallationRepositories(
     defaultBranch: repository.default_branch,
     url: repository.html_url
   }));
+}
+
+export async function createGitHubIssue(
+  installationToken: string,
+  owner: string,
+  name: string,
+  issue: GitHubIssueInput,
+  fetchImpl: Fetch = fetch
+): Promise<GitHubIssueResult> {
+  const response = await fetchImpl(
+    `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/issues`,
+    {
+      method: "POST",
+      headers: {
+        ...authHeaders(installationToken, "token"),
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(issue)
+    }
+  );
+
+  await throwIfGitHubError(response, "GitHub Issue could not be created.");
+
+  const body = (await response.json()) as { html_url?: string };
+  if (!body.html_url) {
+    throw new GitHubAppApiError("GitHub Issue response was invalid.");
+  }
+
+  return { url: body.html_url };
 }
 
 function authHeaders(token: string, scheme: "Bearer" | "token"): HeadersInit {

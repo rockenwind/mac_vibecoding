@@ -46,6 +46,9 @@ export default function Home() {
   const [scanHistory, setScanHistory] = useState<ScanHistoryEntry[]>([]);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [issueError, setIssueError] = useState<string | null>(null);
+  const [issueUrl, setIssueUrl] = useState<string | null>(null);
+  const [isCreatingIssue, setIsCreatingIssue] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
 
   const hasFindings = Boolean(scan?.findings.length);
@@ -85,6 +88,8 @@ export default function Home() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+    setIssueError(null);
+    setIssueUrl(null);
     setIsScanning(true);
 
     try {
@@ -121,6 +126,37 @@ export default function Home() {
       setError(message);
     } finally {
       setIsScanning(false);
+    }
+  }
+
+  async function handleCreateIssue() {
+    if (!scan || !installationId.trim()) {
+      return;
+    }
+
+    setIssueError(null);
+    setIssueUrl(null);
+    setIsCreatingIssue(true);
+
+    try {
+      const response = await fetch(`/api/scans/${encodeURIComponent(scan.id)}/github-issue`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ installationId: Number(installationId) })
+      });
+      const data = (await response.json()) as { issue?: { url?: string }; error?: string };
+
+      if (!response.ok || !data.issue?.url) {
+        throw new Error(data.error ?? "GitHub Issue could not be created.");
+      }
+
+      setIssueUrl(data.issue.url);
+    } catch (createIssueError) {
+      const message =
+        createIssueError instanceof Error ? createIssueError.message : "GitHub Issue could not be created.";
+      setIssueError(message);
+    } finally {
+      setIsCreatingIssue(false);
     }
   }
 
@@ -314,7 +350,22 @@ export default function Home() {
                 <a className="report-link" href={`/api/scans/${encodeURIComponent(scan.id)}/markdown`}>
                   Markdown report
                 </a>
+                {installationId.trim() ? (
+                  <button type="button" onClick={handleCreateIssue} disabled={isCreatingIssue}>
+                    {isCreatingIssue ? "Creating issue..." : "Create GitHub issue"}
+                  </button>
+                ) : null}
               </div>
+              {issueUrl ? (
+                <p className="issue-status">
+                  <a href={issueUrl}>GitHub issue created</a>
+                </p>
+              ) : null}
+              {issueError ? (
+                <p className="issue-error" role="alert">
+                  {issueError}
+                </p>
+              ) : null}
               <details>
                 <summary id="report-title">JSON report</summary>
                 <pre>{reportJson}</pre>
