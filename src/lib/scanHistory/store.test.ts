@@ -2,7 +2,12 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { compareScanResults, readScanHistory, recordScan } from "./store";
+import {
+  compareScanResults,
+  createJsonScanHistoryStore,
+  readScanHistory,
+  recordScan
+} from "./store";
 import type { ScanResult } from "@/lib/scanner/types";
 
 let tempDir: string;
@@ -58,6 +63,19 @@ describe("scan history store", () => {
     expect(first.savedAt).toBe("2026-07-01T00:00:00.000Z");
     expect(second.savedAt).toBe("2026-07-02T00:00:00.000Z");
     expect(history.map((entry) => entry.scan.id)).toEqual(["scan_new", "scan_old"]);
+  });
+
+  it("can read and write through an injected JSON history store", async () => {
+    const store = createJsonScanHistoryStore(join(tempDir, "custom", "history.json"));
+
+    await store.record({ ...baseScan, id: "scan_store" }, new Date("2026-07-02T00:00:00Z"));
+
+    await expect(store.read()).resolves.toMatchObject([
+      {
+        savedAt: "2026-07-02T00:00:00.000Z",
+        scan: { id: "scan_store" }
+      }
+    ]);
   });
 
   it("compares a scan with the previous scan from the same repository", async () => {

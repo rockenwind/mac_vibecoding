@@ -157,6 +157,19 @@ describe("Home", () => {
     expect(screen.getAllByText("Possible exposed credential").length).toBeGreaterThan(0);
   });
 
+  it("shows a Markdown report download link after a repository scan", async () => {
+    render(<Home />);
+
+    fireEvent.change(screen.getByLabelText("GitHub repository URL"), {
+      target: { value: "https://github.com/example/repo" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Scan repository" }));
+
+    const link = await screen.findByRole("link", { name: "Markdown report" });
+
+    expect(link).toHaveAttribute("href", "/api/scans/scan_test/markdown");
+  });
+
   it("submits only repository scan input", async () => {
     const fetchMock = vi.mocked(fetch);
     render(<Home />);

@@ -293,6 +293,11 @@ export default function Home() {
             </section>
 
             <section className="panel report-panel" aria-labelledby="report-title">
+              <div className="report-actions">
+                <a className="report-link" href={`/api/scans/${encodeURIComponent(scan.id)}/markdown`}>
+                  Markdown report
+                </a>
+              </div>
               <details>
                 <summary id="report-title">JSON report</summary>
                 <pre>{reportJson}</pre>
