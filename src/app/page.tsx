@@ -269,6 +269,11 @@ export default function Home() {
               {comparison ? (
                 <section className="comparison-panel" aria-labelledby="comparison-title">
                   <h3 id="comparison-title">Comparison</h3>
+                  {comparison.previousScanId ? (
+                    <p className="comparison-source">Compared with {comparison.previousScanId}</p>
+                  ) : (
+                    <p className="comparison-source">No previous scan for this repository.</p>
+                  )}
                   <div className="comparison-grid">
                     <div>
                       <span>New</span>
@@ -283,8 +288,21 @@ export default function Home() {
                       <strong>{comparison.unchangedFindings.length}</strong>
                     </div>
                   </div>
-                  <ComparisonList title="New findings" findings={comparison.newFindings} />
-                  <ComparisonList title="Resolved findings" findings={comparison.resolvedFindings} />
+                  <ComparisonList
+                    title="New findings"
+                    emptyText="No new findings."
+                    findings={comparison.newFindings}
+                  />
+                  <ComparisonList
+                    title="Resolved findings"
+                    emptyText="No resolved findings."
+                    findings={comparison.resolvedFindings}
+                  />
+                  <ComparisonList
+                    title="Unchanged findings"
+                    emptyText="No unchanged findings."
+                    findings={comparison.unchangedFindings}
+                  />
                 </section>
               ) : null}
 
@@ -383,9 +401,22 @@ export default function Home() {
   );
 }
 
-function ComparisonList({ title, findings }: { title: string; findings: Finding[] }) {
+function ComparisonList({
+  title,
+  emptyText,
+  findings
+}: {
+  title: string;
+  emptyText: string;
+  findings: Finding[];
+}) {
   if (!findings.length) {
-    return null;
+    return (
+      <div className="comparison-list">
+        <h4>{title}</h4>
+        <p className="comparison-empty">{emptyText}</p>
+      </div>
+    );
   }
 
   return (
@@ -393,7 +424,13 @@ function ComparisonList({ title, findings }: { title: string; findings: Finding[
       <h4>{title}</h4>
       <ul>
         {findings.slice(0, 3).map((finding) => (
-          <li key={finding.id}>{finding.title}</li>
+          <li key={finding.id}>
+            <span className={`severity-badge severity-${finding.severity}`}>
+              {severityLabels[finding.severity]}
+            </span>
+            <span>{finding.title}</span>
+            <small>{formatLocation(finding.filePath, finding.lineStart, finding.lineEnd)}</small>
+          </li>
         ))}
       </ul>
     </div>
