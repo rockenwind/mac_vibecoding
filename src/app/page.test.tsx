@@ -41,6 +41,74 @@ describe("Home", () => {
             })
           };
         }
+        if (url === "/api/scans/scan_previous") {
+          return {
+            ok: true,
+            json: async () => ({
+              scan: {
+                id: "scan_previous",
+                repository: {
+                  owner: "example",
+                  name: "repo",
+                  url: "https://github.com/example/repo",
+                  defaultBranch: "main"
+                },
+                summary: { critical: 1, high: 0, medium: 0, low: 0, info: 0 },
+                warnings: [],
+                findings: [
+                  {
+                    id: "secret.exposed-token:.env:1",
+                    ruleId: "secret.exposed-token",
+                    title: "Possible exposed credential",
+                    severity: "critical",
+                    category: "secret",
+                    filePath: ".env",
+                    lineStart: 1,
+                    lineEnd: 1,
+                    evidence: "OPENAI_API_KEY=sk-...redacted...",
+                    whyItMatters: "Exposed credentials can let attackers access services.",
+                    fixSuggestion: "Revoke the credential and load it from a secret manager."
+                  }
+                ]
+              },
+              history: {
+                savedAt: "2026-07-02T00:00:00.000Z",
+                scan: {
+                  id: "scan_previous",
+                  repository: {
+                    owner: "example",
+                    name: "repo",
+                    url: "https://github.com/example/repo",
+                    defaultBranch: "main"
+                  },
+                  summary: { critical: 1, high: 0, medium: 0, low: 0, info: 0 },
+                  warnings: [],
+                  findings: []
+                }
+              },
+              comparison: {
+                previousScanId: "scan_older",
+                newFindings: [
+                  {
+                    id: "secret.exposed-token:.env:1",
+                    ruleId: "secret.exposed-token",
+                    title: "Possible exposed credential",
+                    severity: "critical",
+                    category: "secret",
+                    filePath: ".env",
+                    lineStart: 1,
+                    lineEnd: 1,
+                    evidence: "OPENAI_API_KEY=sk-...redacted...",
+                    whyItMatters: "Exposed credentials can let attackers access services.",
+                    fixSuggestion: "Revoke the credential and load it from a secret manager."
+                  }
+                ],
+                resolvedFindings: [],
+                unchangedFindings: []
+              }
+            })
+          };
+        }
         if (url === "/api/scans" && !init) {
           return {
             ok: true,
@@ -176,6 +244,18 @@ describe("Home", () => {
     expect(await screen.findByText("Recent scans")).toBeInTheDocument();
     expect(screen.getAllByText("example/repo").length).toBeGreaterThan(0);
     expect(screen.getByText("scan_previous")).toBeInTheDocument();
+  });
+
+  it("opens a saved scan from recent history with details and comparison", async () => {
+    render(<Home />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /scan_previous/ }));
+
+    expect(await screen.findByText(/저장된 스캔을 보는 중/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "위험 요약" })).toBeInTheDocument();
+    expect(screen.getByText("필요 조치")).toBeInTheDocument();
+    expect(screen.getByText("Compared with scan_older")).toBeInTheDocument();
+    expect(screen.getAllByText("Possible exposed credential").length).toBeGreaterThan(0);
   });
 
   it("selects a GitHub App repository and fills scan inputs", async () => {

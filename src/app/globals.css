@@ -259,13 +259,38 @@ h3 {
   display: flex;
   gap: 12px;
   justify-content: space-between;
-  padding: 12px;
+  padding: 0;
 }
 
 .history-list div {
   display: grid;
   gap: 4px;
   min-width: 0;
+}
+
+.history-button {
+  align-items: center;
+  background: #ffffff;
+  border: 0;
+  border-radius: 6px;
+  color: var(--text);
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-height: 0;
+  padding: 12px;
+  text-align: left;
+  white-space: normal;
+  width: 100%;
+}
+
+.history-button:hover {
+  background: #f9fafb;
+}
+
+.history-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
 }
 
 .history-list strong,
@@ -289,6 +314,17 @@ h3 {
 .history-top-risk {
   color: var(--text) !important;
   font-weight: 700;
+}
+
+.saved-scan-note {
+  background: #f2f4f7;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  margin: 12px 0 0;
+  padding: 10px;
 }
 
 .results-grid {

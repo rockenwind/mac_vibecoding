@@ -45,6 +45,8 @@ type ScanResponse = {
   error?: string;
 };
 
+type SavedScanResponse = ScanResponse;
+
 type ScanHistoryResponse = {
   history?: ScanHistoryEntry[];
   error?: string;
@@ -120,10 +122,13 @@ export default function Home() {
   const [scanHistory, setScanHistory] = useState<ScanHistoryEntry[]>([]);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [savedScanError, setSavedScanError] = useState<string | null>(null);
   const [issueError, setIssueError] = useState<string | null>(null);
   const [issueUrl, setIssueUrl] = useState<string | null>(null);
+  const [selectedSavedAt, setSelectedSavedAt] = useState<string | null>(null);
   const [isCreatingIssue, setIsCreatingIssue] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
+  const [isLoadingSavedScanId, setIsLoadingSavedScanId] = useState<string | null>(null);
   const [installations, setInstallations] = useState<GitHubInstallation[]>([]);
   const [selectedInstallationId, setSelectedInstallationId] = useState("");
   const [repositories, setRepositories] = useState<GitHubRepository[]>([]);
@@ -244,8 +249,10 @@ export default function Home() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+    setSavedScanError(null);
     setIssueError(null);
     setIssueUrl(null);
+    setSelectedSavedAt(null);
     setIsScanning(true);
 
     try {
@@ -269,6 +276,7 @@ export default function Home() {
 
       setScan(data.scan);
       setComparison(data.comparison ?? null);
+      setSelectedSavedAt(null);
       if (data.history) {
         setScanHistory((currentHistory) => [
           data.history as ScanHistoryEntry,
@@ -313,6 +321,33 @@ export default function Home() {
       setIssueError(message);
     } finally {
       setIsCreatingIssue(false);
+    }
+  }
+
+  async function handleOpenSavedScan(scanId: string) {
+    setSavedScanError(null);
+    setError(null);
+    setIssueError(null);
+    setIssueUrl(null);
+    setIsLoadingSavedScanId(scanId);
+
+    try {
+      const response = await fetch(`/api/scans/${encodeURIComponent(scanId)}`);
+      const data = (await response.json()) as SavedScanResponse;
+
+      if (!response.ok || !data.scan || !data.history) {
+        throw new Error(data.error ?? "Saved scan could not be loaded.");
+      }
+
+      setScan(data.scan);
+      setComparison(data.comparison ?? null);
+      setSelectedSavedAt(data.history.savedAt);
+      setRepositoryUrl(data.scan.repository.url);
+    } catch (openError) {
+      const message = openError instanceof Error ? openError.message : "Saved scan could not be loaded.";
+      setSavedScanError(message);
+    } finally {
+      setIsLoadingSavedScanId(null);
     }
   }
 
@@ -418,6 +453,12 @@ export default function Home() {
           </div>
         ) : null}
 
+        {savedScanError ? (
+          <div className="status-message status-error" role="alert">
+            {savedScanError}
+          </div>
+        ) : null}
+
         <section className="panel history-panel" aria-labelledby="history-title">
           <div className="panel-heading">
             <h2 id="history-title">Recent scans</h2>
@@ -430,7 +471,12 @@ export default function Home() {
           ) : recentHistory.length ? (
             <ul className="history-list">
               {recentHistory.map((entry) => (
-                <HistoryEntryItem entry={entry} key={`${entry.savedAt}-${entry.scan.id}`} />
+                <HistoryEntryItem
+                  entry={entry}
+                  isLoading={isLoadingSavedScanId === entry.scan.id}
+                  key={`${entry.savedAt}-${entry.scan.id}`}
+                  onOpen={handleOpenSavedScan}
+                />
               ))}
             </ul>
           ) : (
@@ -464,6 +510,12 @@ export default function Home() {
                 {findingCount === 1 ? "1 finding" : `${findingCount} findings`} on{" "}
                 {scan.repository.defaultBranch}
               </p>
+
+              {selectedSavedAt ? (
+                <p className="saved-scan-note">
+                  저장된 스캔을 보는 중 · {new Date(selectedSavedAt).toLocaleString()}
+                </p>
+              ) : null}
 
               <section className="risk-summary" aria-labelledby="risk-summary-title">
                 <h3 id="risk-summary-title">위험 요약</h3>
@@ -677,27 +729,42 @@ function ComparisonList({
   );
 }
 
-function HistoryEntryItem({ entry }: { entry: ScanHistoryEntry }) {
+function HistoryEntryItem({
+  entry,
+  isLoading,
+  onOpen
+}: {
+  entry: ScanHistoryEntry;
+  isLoading: boolean;
+  onOpen(scanId: string): void;
+}) {
   const topFinding = highestRiskFinding(entry.scan.findings);
   const highRiskCount = entry.scan.summary.critical + entry.scan.summary.high;
 
   return (
     <li>
-      <div>
-        <strong>
-          {entry.scan.repository.owner}/{entry.scan.repository.name}
-        </strong>
-        <span>{entry.scan.id}</span>
-        {topFinding ? (
-          <span className="history-top-risk">
-            최고 위험: {categoryLabels[topFinding.category]} · {topFinding.title}
-          </span>
-        ) : null}
-      </div>
-      <small>
-        {entry.scan.findings.length} findings · {highRiskCount} high risk
-        {topFinding ? ` · ${severityPriorityLabels[topFinding.severity]}` : ""}
-      </small>
+      <button
+        className="history-button"
+        disabled={isLoading}
+        onClick={() => onOpen(entry.scan.id)}
+        type="button"
+      >
+        <div>
+          <strong>
+            {entry.scan.repository.owner}/{entry.scan.repository.name}
+          </strong>
+          <span>{entry.scan.id}</span>
+          {topFinding ? (
+            <span className="history-top-risk">
+              최고 위험: {categoryLabels[topFinding.category]} · {topFinding.title}
+            </span>
+          ) : null}
+        </div>
+        <small>
+          {isLoading ? "Loading saved scan..." : `${entry.scan.findings.length} findings · ${highRiskCount} high risk`}
+          {!isLoading && topFinding ? ` · ${severityPriorityLabels[topFinding.severity]}` : ""}
+        </small>
+      </button>
     </li>
   );
 }
