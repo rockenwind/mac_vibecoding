@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "tsc --noEmit",
+    "github:check": "node scripts/check-github-app-config.mjs",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest"
   },
