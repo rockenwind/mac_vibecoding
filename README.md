@@ -58,6 +58,20 @@ GITHUB_APP_PRIVATE_KEY
 
 `GITHUB_APP_PRIVATE_KEY`는 줄바꿈을 `\n` 문자열로 넣어도 서버에서 실제 줄바꿈으로 변환합니다.
 
+로컬에서는 예시 파일을 복사해 값을 채웁니다.
+
+```bash
+cp .env.example .env.local
+```
+
+설정값이 준비됐는지 확인합니다.
+
+```bash
+pnpm run github:check
+```
+
+준비가 끝나면 웹 화면에서 GitHub App 설치 목록이 표시됩니다. 설정값이 없으면 설치 목록 API는 `GitHub App is not configured.`와 빠진 항목 목록을 반환합니다.
+
 ## 로컬 실행
 
 의존성을 설치합니다.
@@ -96,6 +110,12 @@ CI=true pnpm lint
 
 ```bash
 CI=true pnpm run build
+```
+
+GitHub App 로컬 설정을 확인합니다.
+
+```bash
+pnpm run github:check
 ```
 
 ## 현재 범위
