@@ -1,32 +1,53 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { POST } from "./route";
+import { GET, POST } from "./route";
 
 const mocks = vi.hoisted(() => ({
-  fetchRepositoryFiles: vi.fn()
+  fetchRepositoryFiles: vi.fn(),
+  readScanHistory: vi.fn(),
+  recordScan: vi.fn(),
+  findPreviousScan: vi.fn(),
+  compareScanResults: vi.fn()
 }));
 
 vi.mock("@/lib/github/source", () => ({
   fetchRepositoryFiles: mocks.fetchRepositoryFiles
 }));
 
+vi.mock("@/lib/scanHistory/store", () => ({
+  readScanHistory: mocks.readScanHistory,
+  recordScan: mocks.recordScan,
+  findPreviousScan: mocks.findPreviousScan,
+  compareScanResults: mocks.compareScanResults
+}));
+
 describe("POST /api/scans", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     mocks.fetchRepositoryFiles.mockResolvedValue({
-    repository: {
-      owner: "example",
-      name: "repo",
-      url: "https://github.com/example/repo",
-      defaultBranch: "main"
-    },
-    files: [
-      {
-        path: ".env",
-        size: 64,
-        content: "OPENAI_API_KEY=sk-proj-abcdefghijklmnopqrstuvwxyz123456"
-      }
-    ],
-    warnings: []
+      repository: {
+        owner: "example",
+        name: "repo",
+        url: "https://github.com/example/repo",
+        defaultBranch: "main"
+      },
+      files: [
+        {
+          path: ".env",
+          size: 64,
+          content: "OPENAI_API_KEY=sk-proj-abcdefghijklmnopqrstuvwxyz123456"
+        }
+      ],
+      warnings: []
     });
+    mocks.readScanHistory.mockResolvedValue([]);
+    mocks.recordScan.mockImplementation(async (scan) => ({ savedAt: "2026-07-02T00:00:00.000Z", scan }));
+    mocks.findPreviousScan.mockReturnValue(null);
+    mocks.compareScanResults.mockImplementation((scan) => ({
+      previousScanId: null,
+      newFindings: scan.findings,
+      resolvedFindings: [],
+      unchangedFindings: []
+    }));
   });
 
   it("returns a scan result for a valid GitHub URL", async () => {
@@ -42,6 +63,8 @@ describe("POST /api/scans", () => {
     expect(response.status).toBe(200);
     expect(body.scan.repository.name).toBe("repo");
     expect(body.scan.findings.length).toBeGreaterThan(0);
+    expect(body.history.savedAt).toBe("2026-07-02T00:00:00.000Z");
+    expect(body.comparison.newFindings.length).toBeGreaterThan(0);
   });
 
   it("keeps repository scan results independent from job signal metadata", async () => {
@@ -109,5 +132,37 @@ describe("POST /api/scans", () => {
 
     expect(response.status).toBe(429);
     expect(body.error).toBe("GitHub rate limit reached. Try again later.");
+  });
+});
+
+describe("GET /api/scans", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.readScanHistory.mockResolvedValue([
+      {
+        savedAt: "2026-07-02T00:00:00.000Z",
+        scan: {
+          id: "scan_test",
+          repository: {
+            owner: "example",
+            name: "repo",
+            url: "https://github.com/example/repo",
+            defaultBranch: "main"
+          },
+          summary: { critical: 1, high: 0, medium: 0, low: 0, info: 0 },
+          warnings: [],
+          findings: []
+        }
+      }
+    ]);
+  });
+
+  it("returns recent scan history", async () => {
+    const response = await GET();
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.history).toHaveLength(1);
+    expect(body.history[0].scan.repository.name).toBe("repo");
   });
 });

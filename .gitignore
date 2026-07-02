@@ -2,6 +2,7 @@
 .worktrees/
 .tools/
 .pnpm-store/
+.data/
 node_modules/
 .next/
 coverage/

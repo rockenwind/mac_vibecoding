@@ -1,6 +1,22 @@
 import { parseGitHubRepositoryUrl } from "@/lib/github/url";
 import { fetchRepositoryFiles } from "@/lib/github/source";
 import { runScan } from "@/lib/scanner/scan";
+import {
+  compareScanResults,
+  findPreviousScan,
+  readScanHistory,
+  recordScan
+} from "@/lib/scanHistory/store";
+
+export async function GET(): Promise<Response> {
+  try {
+    const history = await readScanHistory();
+    return Response.json({ history });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not read scan history.";
+    return Response.json({ error: message }, { status: 500 });
+  }
+}
 
 export async function POST(request: Request): Promise<Response> {
   try {
@@ -13,8 +29,12 @@ export async function POST(request: Request): Promise<Response> {
     const repository = parseGitHubRepositoryUrl(body.repositoryUrl);
     const source = await fetchRepositoryFiles(repository);
     const scan = runScan(source);
+    const existingHistory = await readScanHistory();
+    const previousScan = findPreviousScan(scan, existingHistory);
+    const history = await recordScan(scan);
+    const comparison = compareScanResults(scan, previousScan);
 
-    return Response.json({ scan });
+    return Response.json({ scan, history, comparison });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Scan failed.";
     const status = message.includes("GitHub rate limit") ? 429 : 400;
