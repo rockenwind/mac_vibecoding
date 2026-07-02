@@ -3,7 +3,6 @@ import { shouldScanFile } from "./fileFilter";
 import type {
   RepositoryFile,
   RepositoryRef,
-  ScanFocus,
   ScanResult,
   ScanSummary,
   ScanWarning,
@@ -16,7 +15,6 @@ export function runScan(input: {
   repository: Required<RepositoryRef>;
   files: RepositoryFile[];
   warnings: ScanWarning[];
-  focus?: ScanFocus;
 }): ScanResult {
   const selectedFiles = input.files.filter((file) =>
     shouldScanFile({ path: file.path, size: file.size })
@@ -33,8 +31,7 @@ export function runScan(input: {
     repository: input.repository,
     summary,
     findings,
-    warnings: input.warnings,
-    focus: input.focus
+    warnings: input.warnings
   };
 }
 

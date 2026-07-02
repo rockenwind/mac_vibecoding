@@ -1,5 +1,5 @@
 {
-  "name": "mac-vibecoding-ai-security-inspector",
+  "name": "repository-security-scan",
   "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@11.7.0",
@@ -13,7 +13,6 @@
   },
   "dependencies": {
     "next": "^15.3.0",
-    "pg": "^8.22.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
@@ -21,7 +20,6 @@
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.2.0",
     "@types/node": "^22.13.0",
-    "@types/pg": "^8.20.0",
     "@types/react": "^19.0.8",
     "@types/react-dom": "^19.0.3",
     "@vitejs/plugin-react": "^4.3.4",

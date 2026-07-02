@@ -40,17 +40,10 @@ export type ScanWarning = {
   message: string;
 };
 
-export type ScanFocus = {
-  area: string;
-  keywords: string[];
-  checklist: string[];
-};
-
 export type ScanResult = {
   id: string;
   repository: Required<RepositoryRef>;
   summary: ScanSummary;
   findings: Finding[];
   warnings: ScanWarning[];
-  focus?: ScanFocus;
 };
