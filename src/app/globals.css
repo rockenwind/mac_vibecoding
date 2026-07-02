@@ -399,17 +399,36 @@ h3 {
   line-height: 1;
 }
 
+.comparison-source,
+.comparison-empty {
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.45;
+  margin: 0;
+}
+
 .comparison-list h4 {
   font-size: 0.86rem;
   margin: 0 0 6px;
 }
 
 .comparison-list ul {
-  color: var(--muted);
   display: grid;
   gap: 5px;
   margin: 0;
-  padding-left: 18px;
+  padding: 0;
+}
+
+.comparison-list li {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.comparison-list small {
+  color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
 .warnings ul,

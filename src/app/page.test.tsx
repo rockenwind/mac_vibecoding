@@ -115,8 +115,8 @@ describe("Home", () => {
     await waitFor(() => {
       expect(screen.getAllByText("Possible exposed credential").length).toBeGreaterThan(0);
     });
-    expect(screen.getByText("Critical")).toBeInTheDocument();
-    expect(screen.getByText(".env:1")).toBeInTheDocument();
+    expect(screen.getAllByText("Critical").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(".env:1").length).toBeGreaterThan(0);
   });
 
   it("loads and renders recent scan history", async () => {
@@ -155,6 +155,25 @@ describe("Home", () => {
     expect(screen.getByText("Resolved")).toBeInTheDocument();
     expect(screen.getByText("Unchanged")).toBeInTheDocument();
     expect(screen.getAllByText("Possible exposed credential").length).toBeGreaterThan(0);
+  });
+
+  it("renders detailed comparison groups", async () => {
+    render(<Home />);
+
+    fireEvent.change(screen.getByLabelText("GitHub repository URL"), {
+      target: { value: "https://github.com/example/repo" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Scan repository" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Compared with scan_previous")).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole("heading", { name: "New findings" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Resolved findings" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Unchanged findings" })).toBeInTheDocument();
+    expect(screen.getByText("No resolved findings.")).toBeInTheDocument();
+    expect(screen.getByText("No unchanged findings.")).toBeInTheDocument();
   });
 
   it("shows a Markdown report download link after a repository scan", async () => {
