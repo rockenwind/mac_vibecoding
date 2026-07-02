@@ -14,6 +14,30 @@ const severityLabels: Record<Severity, string> = {
   info: "Info"
 };
 
+const severityPriorityLabels: Record<Severity, string> = {
+  critical: "즉시 조치 필요",
+  high: "우선 검토 필요",
+  medium: "계획 조치 필요",
+  low: "정기 개선 대상",
+  info: "참고 정보"
+};
+
+const severityImpactLabels: Record<Severity, string> = {
+  critical: "서비스 권한 탈취, 비밀값 유출, 원격 코드 실행으로 이어질 수 있는 최고 위험입니다.",
+  high: "공격자가 권한 상승이나 임의 실행 경로를 만들 수 있어 빠른 검토가 필요합니다.",
+  medium: "조건이 맞으면 보안 사고로 확장될 수 있어 계획된 수정이 필요합니다.",
+  low: "직접적인 악용 가능성은 낮지만 보안 품질 개선이 필요합니다.",
+  info: "즉시 위험은 낮지만 추적하면 좋은 보안 참고 항목입니다."
+};
+
+const categoryLabels: Record<Finding["category"], string> = {
+  secret: "비밀값 노출",
+  "agent-tooling": "에이전트 도구 권한",
+  "prompt-injection": "프롬프트 주입",
+  mcp: "MCP 설정 위험",
+  "dangerous-execution": "위험한 명령 실행"
+};
+
 type ScanResponse = {
   scan?: ScanResult;
   history?: ScanHistoryEntry;
@@ -63,6 +87,29 @@ function formatLocation(filePath: string, lineStart?: number, lineEnd?: number):
   }
 
   return `${filePath}:${lineStart}`;
+}
+
+function summarizeRisk(scan: ScanResult): string {
+  if (scan.summary.critical > 0) {
+    return `Critical ${scan.summary.critical}개가 발견되어 즉시 조치가 필요합니다.`;
+  }
+
+  if (scan.summary.high > 0) {
+    return `High ${scan.summary.high}개가 발견되어 우선 검토가 필요합니다.`;
+  }
+
+  if (scan.findings.length > 0) {
+    return `${scan.findings.length}개 발견 항목을 계획적으로 검토하세요.`;
+  }
+
+  return "현재 스캔 범위에서는 조치가 필요한 보안 위험이 발견되지 않았습니다.";
+}
+
+function highestRiskFinding(findings: Finding[]): Finding | undefined {
+  const severityOrder: Severity[] = ["critical", "high", "medium", "low", "info"];
+  return [...findings].sort((first, second) => {
+    return severityOrder.indexOf(first.severity) - severityOrder.indexOf(second.severity);
+  })[0];
 }
 
 export default function Home() {
@@ -383,17 +430,7 @@ export default function Home() {
           ) : recentHistory.length ? (
             <ul className="history-list">
               {recentHistory.map((entry) => (
-                <li key={`${entry.savedAt}-${entry.scan.id}`}>
-                  <div>
-                    <strong>
-                      {entry.scan.repository.owner}/{entry.scan.repository.name}
-                    </strong>
-                    <span>{entry.scan.id}</span>
-                  </div>
-                  <small>
-                    {entry.scan.findings.length} findings · {entry.scan.summary.critical + entry.scan.summary.high} high risk
-                  </small>
-                </li>
+                <HistoryEntryItem entry={entry} key={`${entry.savedAt}-${entry.scan.id}`} />
               ))}
             </ul>
           ) : (
@@ -427,6 +464,23 @@ export default function Home() {
                 {findingCount === 1 ? "1 finding" : `${findingCount} findings`} on{" "}
                 {scan.repository.defaultBranch}
               </p>
+
+              <section className="risk-summary" aria-labelledby="risk-summary-title">
+                <h3 id="risk-summary-title">위험 요약</h3>
+                <p>{summarizeRisk(scan)}</p>
+                <div className="risk-summary-grid">
+                  <div>
+                    <span>즉시 조치</span>
+                    <strong>{scan.summary.critical}</strong>
+                    <small>Critical</small>
+                  </div>
+                  <div>
+                    <span>우선 검토</span>
+                    <strong>{scan.summary.high}</strong>
+                    <small>High</small>
+                  </div>
+                </div>
+              </section>
 
               {comparison ? (
                 <section className="comparison-panel" aria-labelledby="comparison-title">
@@ -495,6 +549,10 @@ export default function Home() {
                         </span>
                         <h3>{finding.title}</h3>
                       </div>
+                      <div className="finding-priority-row">
+                        <span>{severityPriorityLabels[finding.severity]}</span>
+                        <span>{categoryLabels[finding.category]}</span>
+                      </div>
                       <p className="finding-meta">
                         <span>
                           {finding.ruleId} · {finding.category}
@@ -503,18 +561,38 @@ export default function Home() {
                       </p>
                       <dl className="finding-details">
                         <div>
-                          <dt>Evidence</dt>
+                          <dt>취약점</dt>
+                          <dd>{categoryLabels[finding.category]}: {finding.title}</dd>
+                        </div>
+                        <div>
+                          <dt>우선순위</dt>
+                          <dd>
+                            {severityLabels[finding.severity]} · {severityPriorityLabels[finding.severity]}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>발견 위치</dt>
+                          <dd>{formatLocation(finding.filePath, finding.lineStart, finding.lineEnd)}</dd>
+                        </div>
+                        <div>
+                          <dt>발견 근거</dt>
                           <dd>
                             <code>{finding.evidence}</code>
                           </dd>
                         </div>
                         <div>
-                          <dt>Why it matters</dt>
-                          <dd>{finding.whyItMatters}</dd>
+                          <dt>영향도</dt>
+                          <dd>
+                            {severityImpactLabels[finding.severity]} {finding.whyItMatters}
+                          </dd>
                         </div>
                         <div>
-                          <dt>Fix</dt>
+                          <dt>필요 조치</dt>
                           <dd>{finding.fixSuggestion}</dd>
+                        </div>
+                        <div>
+                          <dt>원본 규칙</dt>
+                          <dd>{finding.ruleId}</dd>
                         </div>
                       </dl>
                     </li>
@@ -596,5 +674,30 @@ function ComparisonList({
         ))}
       </ul>
     </div>
+  );
+}
+
+function HistoryEntryItem({ entry }: { entry: ScanHistoryEntry }) {
+  const topFinding = highestRiskFinding(entry.scan.findings);
+  const highRiskCount = entry.scan.summary.critical + entry.scan.summary.high;
+
+  return (
+    <li>
+      <div>
+        <strong>
+          {entry.scan.repository.owner}/{entry.scan.repository.name}
+        </strong>
+        <span>{entry.scan.id}</span>
+        {topFinding ? (
+          <span className="history-top-risk">
+            최고 위험: {categoryLabels[topFinding.category]} · {topFinding.title}
+          </span>
+        ) : null}
+      </div>
+      <small>
+        {entry.scan.findings.length} findings · {highRiskCount} high risk
+        {topFinding ? ` · ${severityPriorityLabels[topFinding.severity]}` : ""}
+      </small>
+    </li>
   );
 }

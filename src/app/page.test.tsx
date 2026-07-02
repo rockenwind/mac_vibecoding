@@ -152,6 +152,24 @@ describe("Home", () => {
     expect(screen.getAllByText(".env:1").length).toBeGreaterThan(0);
   });
 
+  it("renders actionable Korean finding details after a scan", async () => {
+    render(<Home />);
+
+    fireEvent.change(screen.getByLabelText("GitHub repository URL"), {
+      target: { value: "https://github.com/example/repo" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Scan repository" }));
+
+    expect(await screen.findByRole("heading", { name: "위험 요약" })).toBeInTheDocument();
+    expect(screen.getByText("즉시 조치 필요")).toBeInTheDocument();
+    expect(screen.getByText("영향도")).toBeInTheDocument();
+    expect(screen.getByText("필요 조치")).toBeInTheDocument();
+    expect(screen.getByText("발견 근거")).toBeInTheDocument();
+    expect(screen.getByText("발견 위치")).toBeInTheDocument();
+    expect(screen.getByText("취약점")).toBeInTheDocument();
+    expect(screen.getByText("우선순위")).toBeInTheDocument();
+  });
+
   it("loads and renders recent scan history", async () => {
     render(<Home />);
 

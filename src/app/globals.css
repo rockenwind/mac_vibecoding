@@ -286,6 +286,11 @@ h3 {
   line-height: 1.4;
 }
 
+.history-top-risk {
+  color: var(--text) !important;
+  font-weight: 700;
+}
+
 .results-grid {
   align-items: start;
   display: grid;
@@ -432,6 +437,46 @@ h3 {
   padding-top: 16px;
 }
 
+.risk-summary {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+  padding-top: 16px;
+}
+
+.risk-summary p {
+  line-height: 1.5;
+  margin: 0;
+}
+
+.risk-summary-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.risk-summary-grid div {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  display: grid;
+  gap: 5px;
+  padding: 10px;
+}
+
+.risk-summary-grid span,
+.risk-summary-grid small {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.risk-summary-grid strong {
+  font-size: 1.45rem;
+  line-height: 1;
+}
+
 .comparison-grid {
   display: grid;
   gap: 8px;
@@ -525,6 +570,24 @@ h3 {
   gap: 10px;
 }
 
+.finding-priority-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.finding-priority-row span {
+  background: #f2f4f7;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.2;
+  padding: 6px 9px;
+}
+
 .severity-badge {
   border: 1px solid currentColor;
   border-radius: 999px;
@@ -547,6 +610,7 @@ h3 {
 .finding-details {
   display: grid;
   gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin: 16px 0 0;
 }
 
@@ -636,6 +700,11 @@ pre {
 
   .severity-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .finding-details,
+  .risk-summary-grid {
+    grid-template-columns: 1fr;
   }
 
   .history-list li,
