@@ -31,6 +31,14 @@
 
 `.data` 디렉터리는 런타임 생성물이며 git에는 포함하지 않습니다. 이 파일을 지우면 저장된 스캔 이력도 초기화됩니다.
 
+SQLite로 저장하려면 다음 환경 변수를 사용합니다.
+
+```text
+SCAN_HISTORY_DATABASE_URL=sqlite:.data/scans.sqlite
+```
+
+이 값이 있으면 JSON 파일 대신 SQLite 데이터베이스에 스캔 이력을 저장합니다.
+
 ## GitHub App 연동 기반
 
 비공개 저장소 점검과 GitHub Issue 생성을 위한 서버 API 기반이 준비되어 있습니다.
