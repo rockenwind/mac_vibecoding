@@ -43,7 +43,7 @@ fi
 
 if [ ! -f "$ENV_FILE" ]; then
   echo "환경 파일을 찾을 수 없습니다: $ENV_FILE"
-  echo "docs/vibecoding-mac-setup.md를 보고 .env.local을 먼저 준비하세요."
+  echo "docs/security-network-jobs-service.md를 보고 .env.local을 먼저 준비하세요."
   exit 1
 fi
 
