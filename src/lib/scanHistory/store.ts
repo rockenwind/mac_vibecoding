@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import type { DatabaseSync } from "node:sqlite";
 import type { ScanResult } from "@/lib/scanner/types";
 import type { ScanComparison, ScanHistoryEntry, ScanHistoryStore } from "./types";
 
@@ -59,7 +60,57 @@ export function createJsonScanHistoryStore(historyFile: string): ScanHistoryStor
 }
 
 export function createDefaultScanHistoryStore(): ScanHistoryStore {
+  const databaseFile = getSqliteDatabaseFile();
+  if (databaseFile) {
+    return createSqliteScanHistoryStore(databaseFile);
+  }
+
   return createJsonScanHistoryStore(getHistoryFile());
+}
+
+export function createSqliteScanHistoryStore(databaseFile: string): ScanHistoryStore {
+  return {
+    async read(): Promise<ScanHistoryEntry[]> {
+      await mkdir(dirname(databaseFile), { recursive: true });
+      const database = await openScanHistoryDatabase(databaseFile);
+
+      try {
+        const rows = database
+          .prepare("SELECT saved_at, scan_json FROM scan_history ORDER BY saved_at DESC")
+          .all() as Array<{ saved_at: string; scan_json: string }>;
+
+        return rows.map((row) => ({
+          savedAt: row.saved_at,
+          scan: JSON.parse(row.scan_json) as ScanResult
+        }));
+      } finally {
+        database.close();
+      }
+    },
+
+    async record(scan: ScanResult, now = new Date()): Promise<ScanHistoryEntry> {
+      await mkdir(dirname(databaseFile), { recursive: true });
+      const database = await openScanHistoryDatabase(databaseFile);
+      const entry: ScanHistoryEntry = {
+        savedAt: now.toISOString(),
+        scan
+      };
+
+      try {
+        database
+          .prepare(
+            `INSERT INTO scan_history (id, saved_at, scan_json)
+             VALUES (?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET saved_at = excluded.saved_at, scan_json = excluded.scan_json`
+          )
+          .run(scan.id, entry.savedAt, JSON.stringify(scan));
+      } finally {
+        database.close();
+      }
+
+      return entry;
+    }
+  };
 }
 
 export function findPreviousScan(
@@ -99,6 +150,33 @@ export function compareScanResults(
 
 function getHistoryFile(): string {
   return process.env.SCAN_HISTORY_FILE ?? defaultHistoryFile;
+}
+
+function getSqliteDatabaseFile(): string | null {
+  const value = process.env.SCAN_HISTORY_DATABASE_URL;
+  if (!value?.startsWith("sqlite:")) {
+    return null;
+  }
+
+  const databaseFile = value.slice("sqlite:".length).trim();
+  if (!databaseFile) {
+    throw new Error("SCAN_HISTORY_DATABASE_URL must include a SQLite file path.");
+  }
+
+  return databaseFile;
+}
+
+async function openScanHistoryDatabase(databaseFile: string): Promise<DatabaseSync> {
+  const { DatabaseSync } = await import("node:sqlite");
+  const database = new DatabaseSync(databaseFile);
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS scan_history (
+      id TEXT PRIMARY KEY,
+      saved_at TEXT NOT NULL,
+      scan_json TEXT NOT NULL
+    )
+  `);
+  return database;
 }
 
 function isSameRepository(left: ScanResult, right: ScanResult): boolean {

@@ -1,10 +1,11 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   compareScanResults,
   createJsonScanHistoryStore,
+  createSqliteScanHistoryStore,
   readScanHistory,
   recordScan
 } from "./store";
@@ -46,6 +47,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   delete process.env.SCAN_HISTORY_FILE;
+  delete process.env.SCAN_HISTORY_DATABASE_URL;
   await rm(tempDir, { recursive: true, force: true });
 });
 
@@ -76,6 +78,35 @@ describe("scan history store", () => {
         scan: { id: "scan_store" }
       }
     ]);
+  });
+
+  it("can read and write through an injected SQLite history store", async () => {
+    const store = createSqliteScanHistoryStore(join(tempDir, "scans.sqlite"));
+
+    await store.record({ ...baseScan, id: "scan_sqlite" }, new Date("2026-07-02T00:00:00Z"));
+
+    await expect(store.read()).resolves.toMatchObject([
+      {
+        savedAt: "2026-07-02T00:00:00.000Z",
+        scan: { id: "scan_sqlite" }
+      }
+    ]);
+  });
+
+  it("uses SQLite as the default store when SCAN_HISTORY_DATABASE_URL is configured", async () => {
+    delete process.env.SCAN_HISTORY_FILE;
+    const databaseFile = join(tempDir, "default.sqlite");
+    process.env.SCAN_HISTORY_DATABASE_URL = `sqlite:${databaseFile}`;
+
+    await recordScan({ ...baseScan, id: "scan_default_sqlite" }, new Date("2026-07-02T00:00:00Z"));
+
+    await expect(readScanHistory()).resolves.toMatchObject([
+      {
+        savedAt: "2026-07-02T00:00:00.000Z",
+        scan: { id: "scan_default_sqlite" }
+      }
+    ]);
+    await expect(stat(databaseFile)).resolves.toMatchObject({ isFile: expect.any(Function) });
   });
 
   it("compares a scan with the previous scan from the same repository", async () => {
