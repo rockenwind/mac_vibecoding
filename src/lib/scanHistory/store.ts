@@ -1,52 +1,65 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { ScanResult } from "@/lib/scanner/types";
-import type { ScanComparison, ScanHistoryEntry } from "./types";
+import type { ScanComparison, ScanHistoryEntry, ScanHistoryStore } from "./types";
 
 const defaultHistoryFile = join(process.cwd(), ".data", "scans.json");
 
 export async function readScanHistory(): Promise<ScanHistoryEntry[]> {
-  const historyFile = getHistoryFile();
-
-  try {
-    const raw = await readFile(historyFile, "utf8");
-    if (!raw.trim()) {
-      return [];
-    }
-
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) {
-      throw new Error("Scan history file must contain an array.");
-    }
-
-    return parsed as ScanHistoryEntry[];
-  } catch (error) {
-    if (isNotFoundError(error)) {
-      return [];
-    }
-    if (error instanceof SyntaxError) {
-      throw new Error("Scan history file is not valid JSON.");
-    }
-    throw error;
-  }
+  return createDefaultScanHistoryStore().read();
 }
 
 export async function recordScan(scan: ScanResult, now = new Date()): Promise<ScanHistoryEntry> {
-  const historyFile = getHistoryFile();
-  const history = await readScanHistory();
-  const entry: ScanHistoryEntry = {
-    savedAt: now.toISOString(),
-    scan
+  return createDefaultScanHistoryStore().record(scan, now);
+}
+
+export function createJsonScanHistoryStore(historyFile: string): ScanHistoryStore {
+  return {
+    async read(): Promise<ScanHistoryEntry[]> {
+      try {
+        const raw = await readFile(historyFile, "utf8");
+        if (!raw.trim()) {
+          return [];
+        }
+
+        const parsed = JSON.parse(raw) as unknown;
+        if (!Array.isArray(parsed)) {
+          throw new Error("Scan history file must contain an array.");
+        }
+
+        return parsed as ScanHistoryEntry[];
+      } catch (error) {
+        if (isNotFoundError(error)) {
+          return [];
+        }
+        if (error instanceof SyntaxError) {
+          throw new Error("Scan history file is not valid JSON.");
+        }
+        throw error;
+      }
+    },
+
+    async record(scan: ScanResult, now = new Date()): Promise<ScanHistoryEntry> {
+      const history = await this.read();
+      const entry: ScanHistoryEntry = {
+        savedAt: now.toISOString(),
+        scan
+      };
+
+      const nextHistory = [entry, ...history].sort(
+        (left, right) => Date.parse(right.savedAt) - Date.parse(left.savedAt)
+      );
+
+      await mkdir(dirname(historyFile), { recursive: true });
+      await writeFile(historyFile, `${JSON.stringify(nextHistory, null, 2)}\n`, "utf8");
+
+      return entry;
+    }
   };
+}
 
-  const nextHistory = [entry, ...history].sort(
-    (left, right) => Date.parse(right.savedAt) - Date.parse(left.savedAt)
-  );
-
-  await mkdir(dirname(historyFile), { recursive: true });
-  await writeFile(historyFile, `${JSON.stringify(nextHistory, null, 2)}\n`, "utf8");
-
-  return entry;
+export function createDefaultScanHistoryStore(): ScanHistoryStore {
+  return createJsonScanHistoryStore(getHistoryFile());
 }
 
 export function findPreviousScan(

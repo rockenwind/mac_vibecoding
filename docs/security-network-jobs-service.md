@@ -69,3 +69,9 @@ http://127.0.0.1:8000/login
 - `http://127.0.0.1:8000/login`
 
 운영 환경에서는 Render 서비스와 Neon 데이터베이스 상태를 `apps/vibecoding/README.md`의 운영 절차에 따라 확인합니다.
+
+## 관련 문서
+
+- `apps/vibecoding/README.md`: Jobs 서비스 기준 문서
+- `docs/operations-checklist.md`: Repository scan과 Jobs 서비스 운영 점검 목록
+- `docs/deployment-separation.md`: 두 서비스의 배포 경계
