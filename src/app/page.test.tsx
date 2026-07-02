@@ -216,4 +216,72 @@ describe("Home", () => {
       installationId: 123
     });
   });
+
+  it("creates a GitHub Issue from the current scan when installation ID is set", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = input.toString();
+      if (url === "/api/scans" && !init) {
+        return { ok: true, json: async () => ({ history: [] }) } as Response;
+      }
+      if (url === "/api/scans/scan_test/github-issue") {
+        return {
+          ok: true,
+          json: async () => ({ issue: { url: "https://github.com/example/repo/issues/1" } })
+        } as Response;
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          scan: {
+            id: "scan_test",
+            repository: {
+              owner: "example",
+              name: "repo",
+              url: "https://github.com/example/repo",
+              defaultBranch: "main"
+            },
+            summary: { critical: 0, high: 0, medium: 0, low: 0, info: 0 },
+            warnings: [],
+            findings: []
+          },
+          comparison: { previousScanId: null, newFindings: [], resolvedFindings: [], unchangedFindings: [] },
+          history: {
+            savedAt: "2026-07-02T00:00:00.000Z",
+            scan: {
+              id: "scan_test",
+              repository: {
+                owner: "example",
+                name: "repo",
+                url: "https://github.com/example/repo",
+                defaultBranch: "main"
+              },
+              summary: { critical: 0, high: 0, medium: 0, low: 0, info: 0 },
+              warnings: [],
+              findings: []
+            }
+          }
+        })
+      } as Response;
+    });
+
+    render(<Home />);
+    fireEvent.change(screen.getByLabelText("GitHub repository URL"), {
+      target: { value: "https://github.com/example/repo" }
+    });
+    fireEvent.change(screen.getByLabelText("GitHub App installation ID"), {
+      target: { value: "123" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Scan repository" }));
+
+    const button = await screen.findByRole("button", { name: "Create GitHub issue" });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(screen.getByRole("link", { name: "GitHub issue created" })).toHaveAttribute(
+        "href",
+        "https://github.com/example/repo/issues/1"
+      );
+    });
+  });
 });

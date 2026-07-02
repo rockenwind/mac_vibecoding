@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   GitHubAppApiError,
   createInstallationAccessToken,
+  createGitHubIssue,
   listGitHubAppInstallations,
   listInstallationRepositories
 } from "./appClient";
@@ -101,5 +102,43 @@ describe("GitHub App client", () => {
     await expect(listGitHubAppInstallations("jwt-token", fetchMock)).rejects.toBeInstanceOf(
       GitHubAppApiError
     );
+  });
+
+  it("creates a GitHub Issue with an installation token", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      Response.json({
+        html_url: "https://github.com/example/repo/issues/1"
+      })
+    );
+
+    await expect(
+      createGitHubIssue(
+        "installation-token",
+        "example",
+        "repo",
+        {
+          title: "Security scan report",
+          body: "# Report",
+          labels: ["security", "repository-scan"]
+        },
+        fetchMock
+      )
+    ).resolves.toEqual({
+      url: "https://github.com/example/repo/issues/1"
+    });
+    expect(fetchMock).toHaveBeenCalledWith("https://api.github.com/repos/example/repo/issues", {
+      method: "POST",
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: "token installation-token",
+        "Content-Type": "application/json",
+        "X-GitHub-Api-Version": "2022-11-28"
+      },
+      body: JSON.stringify({
+        title: "Security scan report",
+        body: "# Report",
+        labels: ["security", "repository-scan"]
+      })
+    });
   });
 });
