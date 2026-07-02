@@ -53,13 +53,14 @@ Pull request 분석을 추가할 때만 Pull requests 권한을 별도로 추가
 ```text
 GITHUB_APP_ID
 GITHUB_APP_PRIVATE_KEY
-GITHUB_APP_WEBHOOK_SECRET
 GITHUB_APP_CLIENT_ID
-GITHUB_APP_CLIENT_SECRET
-GITHUB_APP_CALLBACK_URL
 ```
 
-## API 계약 초안
+현재 구현에서 필수 값은 `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`입니다. `GITHUB_APP_CLIENT_ID`는 선택 값이며, 추후 설치 화면 또는 OAuth 보조 흐름을 붙일 때 사용합니다.
+
+`GITHUB_APP_PRIVATE_KEY`는 배포 환경에서 한 줄 문자열로 넣기 쉽도록 `\n`을 실제 줄바꿈으로 변환합니다.
+
+## 구현된 API
 
 ### 설치 상태 조회
 
@@ -75,7 +76,9 @@ GET /api/github/installations
     {
       "id": 123,
       "account": "owner",
-      "repositories": 12
+      "repositories": 0,
+      "repositorySelection": "selected",
+      "targetType": "Organization"
     }
   ]
 }
@@ -87,7 +90,28 @@ GET /api/github/installations
 GET /api/github/repositories?installationId=123
 ```
 
+응답 예시는 다음과 같다.
+
+```json
+{
+  "repositories": [
+    {
+      "id": 1,
+      "name": "repo",
+      "fullName": "owner/repo",
+      "private": true,
+      "defaultBranch": "main",
+      "url": "https://github.com/owner/repo"
+    }
+  ]
+}
+```
+
+## 다음 구현 대상
+
 ### GitHub Issue 생성
+
+아래 API는 아직 설계 단계다.
 
 ```text
 POST /api/scans/{scanId}/github-issue
