@@ -67,6 +67,7 @@ describe("Home", () => {
                     ruleId: "secret.exposed-token",
                     title: "Possible exposed credential",
                     severity: "critical",
+                    confidence: "high",
                     category: "secret",
                     filePath: ".env",
                     lineStart: 1,
@@ -100,6 +101,7 @@ describe("Home", () => {
                     ruleId: "secret.exposed-token",
                     title: "Possible exposed credential",
                     severity: "critical",
+                    confidence: "high",
                     category: "secret",
                     filePath: ".env",
                     lineStart: 1,
@@ -160,6 +162,7 @@ describe("Home", () => {
                   ruleId: "secret.exposed-token",
                   title: "Possible exposed credential",
                   severity: "critical",
+                  confidence: "high",
                   category: "secret",
                   filePath: ".env",
                   lineStart: 1,
@@ -178,6 +181,7 @@ describe("Home", () => {
                   ruleId: "secret.exposed-token",
                   title: "Possible exposed credential",
                   severity: "critical",
+                  confidence: "high",
                   category: "secret",
                   filePath: ".env",
                   lineStart: 1,
@@ -242,6 +246,8 @@ describe("Home", () => {
     expect(screen.getByText("발견 위치 / Location")).toBeInTheDocument();
     expect(screen.getByText("취약점 / Vulnerability")).toBeInTheDocument();
     expect(screen.getByText("우선순위 / Priority")).toBeInTheDocument();
+    expect(screen.getByText("신뢰도 / Confidence")).toBeInTheDocument();
+    expect(screen.getByText("높음")).toBeInTheDocument();
   });
 
   it("renders core scan result labels in Korean and English", async () => {

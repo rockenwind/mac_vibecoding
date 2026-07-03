@@ -1,4 +1,5 @@
 export type Severity = "critical" | "high" | "medium" | "low" | "info";
+export type FindingConfidence = "high" | "medium" | "low";
 
 export type FindingCategory =
   | "secret"
@@ -25,6 +26,7 @@ export type Finding = {
   ruleId: string;
   title: string;
   severity: Severity;
+  confidence?: FindingConfidence;
   category: FindingCategory;
   filePath: string;
   lineStart?: number;

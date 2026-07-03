@@ -1,4 +1,4 @@
-import type { Finding, ScanResult, Severity } from "@/lib/scanner/types";
+import type { Finding, FindingConfidence, ScanResult, Severity } from "@/lib/scanner/types";
 
 const severities: Severity[] = ["critical", "high", "medium", "low", "info"];
 
@@ -8,6 +8,12 @@ const severityLabels: Record<Severity, string> = {
   medium: "Medium",
   low: "Low",
   info: "Info"
+};
+
+const confidenceLabels: Record<FindingConfidence, string> = {
+  high: "High",
+  medium: "Medium",
+  low: "Low"
 };
 
 export function buildScanMarkdown(scan: ScanResult): string {
@@ -49,6 +55,7 @@ export function buildScanMarkdown(scan: ScanResult): string {
       `- ID: ${finding.id}`,
       `- Rule: ${finding.ruleId}`,
       `- Severity: ${severityLabels[finding.severity]}`,
+      `- Confidence: ${confidenceLabels[finding.confidence ?? "medium"]}`,
       `- Category: ${finding.category}`,
       `- Location: \`${formatLocation(finding)}\``,
       "",

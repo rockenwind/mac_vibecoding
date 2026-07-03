@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import type { Finding, ScanResult, Severity } from "@/lib/scanner/types";
+import type { Finding, FindingConfidence, ScanResult, Severity } from "@/lib/scanner/types";
 import type { ScanComparison, ScanHistoryEntry } from "@/lib/scanHistory/types";
 
 const severities: Severity[] = ["critical", "high", "medium", "low", "info"];
@@ -28,6 +28,12 @@ const severityImpactLabels: Record<Severity, string> = {
   medium: "조건이 맞으면 보안 사고로 확장될 수 있어 계획된 수정이 필요합니다.",
   low: "직접적인 악용 가능성은 낮지만 보안 품질 개선이 필요합니다.",
   info: "즉시 위험은 낮지만 추적하면 좋은 보안 참고 항목입니다."
+};
+
+const confidenceLabels: Record<FindingConfidence, string> = {
+  high: "높음",
+  medium: "중간",
+  low: "낮음"
 };
 
 const categoryLabels: Record<Finding["category"], string> = {
@@ -94,6 +100,10 @@ function formatLocation(filePath: string, lineStart?: number, lineEnd?: number):
   }
 
   return `${filePath}:${lineStart}`;
+}
+
+function confidenceLabel(finding: Finding): string {
+  return confidenceLabels[finding.confidence ?? "medium"];
 }
 
 function summarizeRisk(scan: ScanResult): string {
@@ -672,6 +682,10 @@ export default function Home() {
                           </dd>
                         </div>
                         <div>
+                          <dt>신뢰도 / Confidence</dt>
+                          <dd>{confidenceLabel(finding)}</dd>
+                        </div>
+                        <div>
                           <dt>발견 위치 / Location</dt>
                           <dd>{formatLocation(finding.filePath, finding.lineStart, finding.lineEnd)}</dd>
                         </div>
@@ -770,7 +784,9 @@ function ComparisonList({
               {severityLabels[finding.severity]}
             </span>
             <span>{finding.title}</span>
-            <small>{formatLocation(finding.filePath, finding.lineStart, finding.lineEnd)}</small>
+            <small>
+              {formatLocation(finding.filePath, finding.lineStart, finding.lineEnd)} · 신뢰도 {confidenceLabel(finding)}
+            </small>
           </li>
         ))}
       </ul>

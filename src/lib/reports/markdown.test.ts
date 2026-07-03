@@ -18,6 +18,7 @@ const scan: ScanResult = {
       ruleId: "secret.exposed-token",
       title: "Possible exposed credential",
       severity: "critical",
+      confidence: "high",
       category: "secret",
       filePath: ".env",
       lineStart: 1,
@@ -39,6 +40,7 @@ describe("buildScanMarkdown", () => {
     expect(markdown).toContain("## Warnings");
     expect(markdown).toContain("Skipped large file dist/app.js");
     expect(markdown).toContain("### Possible exposed credential");
+    expect(markdown).toContain("- Confidence: High");
     expect(markdown).toContain("`.env:1`");
   });
 
