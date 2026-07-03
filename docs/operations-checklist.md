@@ -46,6 +46,8 @@ scripts/install-vibecoding-launch-agent.sh
 scripts/uninstall-vibecoding-launch-agent.sh
 ```
 
+자동 실행은 `~/Library/Application Support/vibecoding/runtime` 아래 실행 복사본을 사용한다. 마이그레이션 파일 누락 오류가 보이면 `main` 최신화 여부를 확인한 뒤 `scripts/install-vibecoding-launch-agent.sh`를 다시 실행해 복사본을 최신화한다.
+
 ### 운영 기준 문서
 
 상세 운영 절차는 `apps/vibecoding/README.md`와 `docs/security-network-jobs-service.md`를 기준으로 한다.
