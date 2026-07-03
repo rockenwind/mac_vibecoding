@@ -48,6 +48,8 @@ scripts/start-vibecoding-local.sh
 scripts/install-vibecoding-launch-agent.sh
 ```
 
+macOS LaunchAgent는 `~/Library/Application Support/vibecoding/runtime` 아래의 실행 복사본을 사용합니다. `Documents` 아래 체크아웃은 백그라운드 LaunchAgent에서 접근이 제한될 수 있기 때문입니다. PR 병합이나 `git pull`로 `apps/vibecoding` 코드와 마이그레이션이 바뀌면 `scripts/install-vibecoding-launch-agent.sh`를 다시 실행해 실행 복사본을 최신화합니다.
+
 자동 실행 해제는 다음 스크립트를 사용합니다.
 
 ```bash

@@ -53,6 +53,10 @@ target_scripts = runtime_dir / "scripts"
 if not source_app.exists():
     raise SystemExit("apps/vibecoding 하위 모듈을 찾을 수 없습니다.")
 
+required_migration = source_app / "migrations" / "versions" / "0005_add_market_signal_snapshots.py"
+if not required_migration.exists():
+    raise SystemExit(f"필수 마이그레이션 파일을 찾을 수 없습니다: {required_migration}")
+
 if target_app.exists():
     shutil.rmtree(target_app)
 
@@ -71,7 +75,17 @@ def ignore(_directory: str, names: list[str]) -> set[str]:
 
 shutil.copytree(source_app, target_app, ignore=ignore)
 shutil.copy2(root_dir / "scripts" / "start-vibecoding-local.sh", target_scripts)
+
+copied_migration = target_app / "migrations" / "versions" / "0005_add_market_signal_snapshots.py"
+if not copied_migration.exists():
+    raise SystemExit(f"런타임 복사본에 필수 마이그레이션 파일이 없습니다: {copied_migration}")
 PY
+
+if [ ! -f "$RUNTIME_APP_DIR/.env.local" ]; then
+  echo "환경 파일을 찾을 수 없습니다: $RUNTIME_APP_DIR/.env.local"
+  echo "docs/security-network-jobs-service.md를 보고 .env.local을 먼저 준비하세요."
+  exit 1
+fi
 
 cd "$RUNTIME_APP_DIR"
 "$PYTHON_BIN" -m venv .venv
