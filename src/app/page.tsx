@@ -52,6 +52,11 @@ type ScanHistoryResponse = {
   error?: string;
 };
 
+type DeleteScanResponse = {
+  deleted?: boolean;
+  error?: string;
+};
+
 type GitHubInstallation = {
   id: number;
   account: string;
@@ -123,12 +128,14 @@ export default function Home() {
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [savedScanError, setSavedScanError] = useState<string | null>(null);
+  const [deleteScanError, setDeleteScanError] = useState<string | null>(null);
   const [issueError, setIssueError] = useState<string | null>(null);
   const [issueUrl, setIssueUrl] = useState<string | null>(null);
   const [selectedSavedAt, setSelectedSavedAt] = useState<string | null>(null);
   const [isCreatingIssue, setIsCreatingIssue] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [isLoadingSavedScanId, setIsLoadingSavedScanId] = useState<string | null>(null);
+  const [isDeletingScanId, setIsDeletingScanId] = useState<string | null>(null);
   const [installations, setInstallations] = useState<GitHubInstallation[]>([]);
   const [selectedInstallationId, setSelectedInstallationId] = useState("");
   const [repositories, setRepositories] = useState<GitHubRepository[]>([]);
@@ -250,6 +257,7 @@ export default function Home() {
     event.preventDefault();
     setError(null);
     setSavedScanError(null);
+    setDeleteScanError(null);
     setIssueError(null);
     setIssueUrl(null);
     setSelectedSavedAt(null);
@@ -326,6 +334,7 @@ export default function Home() {
 
   async function handleOpenSavedScan(scanId: string) {
     setSavedScanError(null);
+    setDeleteScanError(null);
     setError(null);
     setIssueError(null);
     setIssueUrl(null);
@@ -351,15 +360,47 @@ export default function Home() {
     }
   }
 
+  async function handleDeleteSavedScan(scanId: string) {
+    setDeleteScanError(null);
+    setSavedScanError(null);
+    setIsDeletingScanId(scanId);
+
+    try {
+      const response = await fetch(`/api/scans/${encodeURIComponent(scanId)}`, {
+        method: "DELETE"
+      });
+      const data = (await response.json()) as DeleteScanResponse;
+
+      if (!response.ok || !data.deleted) {
+        throw new Error(data.error ?? "Saved scan could not be deleted.");
+      }
+
+      setScanHistory((currentHistory) => currentHistory.filter((entry) => entry.scan.id !== scanId));
+
+      if (scan?.id === scanId) {
+        setScan(null);
+        setComparison(null);
+        setSelectedSavedAt(null);
+        setIssueError(null);
+        setIssueUrl(null);
+      }
+    } catch (deleteError) {
+      const message = deleteError instanceof Error ? deleteError.message : "Saved scan could not be deleted.";
+      setDeleteScanError(message);
+    } finally {
+      setIsDeletingScanId(null);
+    }
+  }
+
   return (
     <main className="app-shell">
       <section className="scan-workspace" aria-labelledby="scanner-title">
         <header className="workspace-header">
           <div>
             <p className="eyebrow">AI Security Inspector</p>
-            <h1 id="scanner-title">Repository scan</h1>
+            <h1 id="scanner-title">저장소 스캔 / Repository scan</h1>
           </div>
-          <p className="workspace-note">Public repositories or GitHub App access</p>
+          <p className="workspace-note">공개 저장소 또는 GitHub App 접근 / Public repositories or GitHub App access</p>
         </header>
 
         <form className="scan-form" onSubmit={handleSubmit}>
@@ -459,10 +500,16 @@ export default function Home() {
           </div>
         ) : null}
 
+        {deleteScanError ? (
+          <div className="status-message status-error" role="alert">
+            {deleteScanError}
+          </div>
+        ) : null}
+
         <section className="panel history-panel" aria-labelledby="history-title">
           <div className="panel-heading">
-            <h2 id="history-title">Recent scans</h2>
-            <span className="scan-id">{recentHistory.length} saved</span>
+            <h2 id="history-title">최근 스캔 / Recent scans</h2>
+            <span className="scan-id">{recentHistory.length} saved / 저장됨</span>
           </div>
           {historyError ? (
             <p className="history-error" role="status">
@@ -473,14 +520,16 @@ export default function Home() {
               {recentHistory.map((entry) => (
                 <HistoryEntryItem
                   entry={entry}
+                  isDeleting={isDeletingScanId === entry.scan.id}
                   isLoading={isLoadingSavedScanId === entry.scan.id}
                   key={`${entry.savedAt}-${entry.scan.id}`}
+                  onDelete={handleDeleteSavedScan}
                   onOpen={handleOpenSavedScan}
                 />
               ))}
             </ul>
           ) : (
-            <p className="empty-state">No saved scans yet.</p>
+            <p className="empty-state">저장된 스캔이 아직 없습니다. / No saved scans yet.</p>
           )}
         </section>
 
@@ -490,12 +539,12 @@ export default function Home() {
               <div className="panel-heading">
                 <div>
                   <p className="panel-kicker">{scan.repository.owner}/{scan.repository.name}</p>
-                  <h2 id="summary-title">Scan summary</h2>
+                  <h2 id="summary-title">스캔 요약 / Scan summary</h2>
                 </div>
                 <span className="scan-id">{scan.id}</span>
               </div>
 
-              <div className="severity-grid" aria-label="Severity summary">
+              <div className="severity-grid" aria-label="심각도 요약 / Severity summary">
                 {severities.map((severity) => (
                   <div className="severity-cell" key={severity}>
                     <span className="summary-label">{severity}</span>
@@ -507,7 +556,7 @@ export default function Home() {
               </div>
 
               <p className="result-count">
-                {findingCount === 1 ? "1 finding" : `${findingCount} findings`} on{" "}
+                발견 항목 / Findings: {findingCount} · Branch:{" "}
                 {scan.repository.defaultBranch}
               </p>
 
@@ -518,16 +567,16 @@ export default function Home() {
               ) : null}
 
               <section className="risk-summary" aria-labelledby="risk-summary-title">
-                <h3 id="risk-summary-title">위험 요약</h3>
+                <h3 id="risk-summary-title">위험 요약 / Risk summary</h3>
                 <p>{summarizeRisk(scan)}</p>
                 <div className="risk-summary-grid">
                   <div>
-                    <span>즉시 조치</span>
+                    <span>즉시 조치 / Immediate</span>
                     <strong>{scan.summary.critical}</strong>
                     <small>Critical</small>
                   </div>
                   <div>
-                    <span>우선 검토</span>
+                    <span>우선 검토 / Priority</span>
                     <strong>{scan.summary.high}</strong>
                     <small>High</small>
                   </div>
@@ -536,39 +585,39 @@ export default function Home() {
 
               {comparison ? (
                 <section className="comparison-panel" aria-labelledby="comparison-title">
-                  <h3 id="comparison-title">Comparison</h3>
+                  <h3 id="comparison-title">비교 / Comparison</h3>
                   {comparison.previousScanId ? (
-                    <p className="comparison-source">Compared with {comparison.previousScanId}</p>
+                    <p className="comparison-source">비교 기준 / Compared with {comparison.previousScanId}</p>
                   ) : (
-                    <p className="comparison-source">No previous scan for this repository.</p>
+                    <p className="comparison-source">이 저장소의 이전 스캔이 없습니다. / No previous scan for this repository.</p>
                   )}
                   <div className="comparison-grid">
                     <div>
-                      <span>New</span>
+                      <span>새로 발견 / New</span>
                       <strong>{comparison.newFindings.length}</strong>
                     </div>
                     <div>
-                      <span>Resolved</span>
+                      <span>해결됨 / Resolved</span>
                       <strong>{comparison.resolvedFindings.length}</strong>
                     </div>
                     <div>
-                      <span>Unchanged</span>
+                      <span>유지됨 / Unchanged</span>
                       <strong>{comparison.unchangedFindings.length}</strong>
                     </div>
                   </div>
                   <ComparisonList
-                    title="New findings"
-                    emptyText="No new findings."
+                    title="새 발견 항목 / New findings"
+                    emptyText="새 발견 항목이 없습니다. / No new findings."
                     findings={comparison.newFindings}
                   />
                   <ComparisonList
-                    title="Resolved findings"
-                    emptyText="No resolved findings."
+                    title="해결된 항목 / Resolved findings"
+                    emptyText="해결된 항목이 없습니다. / No resolved findings."
                     findings={comparison.resolvedFindings}
                   />
                   <ComparisonList
-                    title="Unchanged findings"
-                    emptyText="No unchanged findings."
+                    title="유지된 항목 / Unchanged findings"
+                    emptyText="유지된 항목이 없습니다. / No unchanged findings."
                     findings={comparison.unchangedFindings}
                   />
                 </section>
@@ -576,7 +625,7 @@ export default function Home() {
 
               {scan.warnings.length ? (
                 <div className="warnings" role="status" aria-label="Scan warnings">
-                  <h3>Warnings</h3>
+                  <h3>경고 / Warnings</h3>
                   <ul>
                     {scan.warnings.map((warning) => (
                       <li key={warning.message}>{warning.message}</li>
@@ -588,7 +637,7 @@ export default function Home() {
 
             <section className="panel findings-panel" aria-labelledby="findings-title">
               <div className="panel-heading">
-                <h2 id="findings-title">Findings</h2>
+                <h2 id="findings-title">발견 항목 / Findings</h2>
               </div>
 
               {hasFindings ? (
@@ -613,37 +662,37 @@ export default function Home() {
                       </p>
                       <dl className="finding-details">
                         <div>
-                          <dt>취약점</dt>
+                          <dt>취약점 / Vulnerability</dt>
                           <dd>{categoryLabels[finding.category]}: {finding.title}</dd>
                         </div>
                         <div>
-                          <dt>우선순위</dt>
+                          <dt>우선순위 / Priority</dt>
                           <dd>
                             {severityLabels[finding.severity]} · {severityPriorityLabels[finding.severity]}
                           </dd>
                         </div>
                         <div>
-                          <dt>발견 위치</dt>
+                          <dt>발견 위치 / Location</dt>
                           <dd>{formatLocation(finding.filePath, finding.lineStart, finding.lineEnd)}</dd>
                         </div>
                         <div>
-                          <dt>발견 근거</dt>
+                          <dt>발견 근거 / Evidence</dt>
                           <dd>
                             <code>{finding.evidence}</code>
                           </dd>
                         </div>
                         <div>
-                          <dt>영향도</dt>
+                          <dt>영향도 / Impact</dt>
                           <dd>
                             {severityImpactLabels[finding.severity]} {finding.whyItMatters}
                           </dd>
                         </div>
                         <div>
-                          <dt>필요 조치</dt>
+                          <dt>필요 조치 / Required action</dt>
                           <dd>{finding.fixSuggestion}</dd>
                         </div>
                         <div>
-                          <dt>원본 규칙</dt>
+                          <dt>원본 규칙 / Source rule</dt>
                           <dd>{finding.ruleId}</dd>
                         </div>
                       </dl>
@@ -651,14 +700,14 @@ export default function Home() {
                   ))}
                 </ul>
               ) : (
-                <p className="empty-state">No findings were detected in the scanned files.</p>
+                <p className="empty-state">스캔한 파일에서 발견 항목이 없습니다. / No findings were detected in the scanned files.</p>
               )}
             </section>
 
             <section className="panel report-panel" aria-labelledby="report-title">
               <div className="report-actions">
                 <a className="report-link" href={`/api/scans/${encodeURIComponent(scan.id)}/markdown`}>
-                  Markdown report
+                  마크다운 보고서 / Markdown report
                 </a>
                 {installationId.trim() ? (
                   <button type="button" onClick={handleCreateIssue} disabled={isCreatingIssue}>
@@ -677,15 +726,15 @@ export default function Home() {
                 </p>
               ) : null}
               <details>
-                <summary id="report-title">JSON report</summary>
+                <summary id="report-title">JSON 보고서 / JSON report</summary>
                 <pre>{reportJson}</pre>
               </details>
             </section>
           </div>
         ) : (
           <section className="panel empty-panel" aria-label="No scan results">
-            <h2>Ready to scan</h2>
-            <p>Enter a GitHub repository URL to inspect common AI application security risks.</p>
+            <h2>스캔 준비 / Ready to scan</h2>
+            <p>GitHub 저장소 URL을 입력해 AI 애플리케이션의 주요 보안 위험을 점검하세요. / Enter a GitHub repository URL to inspect common AI application security risks.</p>
           </section>
         )}
       </section>
@@ -731,11 +780,15 @@ function ComparisonList({
 
 function HistoryEntryItem({
   entry,
+  isDeleting,
   isLoading,
+  onDelete,
   onOpen
 }: {
   entry: ScanHistoryEntry;
+  isDeleting: boolean;
   isLoading: boolean;
+  onDelete(scanId: string): void;
   onOpen(scanId: string): void;
 }) {
   const topFinding = highestRiskFinding(entry.scan.findings);
@@ -744,8 +797,9 @@ function HistoryEntryItem({
   return (
     <li>
       <button
+        aria-label={`열기 / Open ${entry.scan.id}`}
         className="history-button"
-        disabled={isLoading}
+        disabled={isLoading || isDeleting}
         onClick={() => onOpen(entry.scan.id)}
         type="button"
       >
@@ -761,9 +815,20 @@ function HistoryEntryItem({
           ) : null}
         </div>
         <small>
-          {isLoading ? "Loading saved scan..." : `${entry.scan.findings.length} findings · ${highRiskCount} high risk`}
+          {isLoading
+            ? "저장된 스캔 불러오는 중... / Loading saved scan..."
+            : `${entry.scan.findings.length} findings / 발견 · ${highRiskCount} high risk / 고위험`}
           {!isLoading && topFinding ? ` · ${severityPriorityLabels[topFinding.severity]}` : ""}
         </small>
+      </button>
+      <button
+        aria-label={`삭제 / Delete ${entry.scan.id}`}
+        className="history-delete-button"
+        disabled={isDeleting}
+        onClick={() => onDelete(entry.scan.id)}
+        type="button"
+      >
+        {isDeleting ? "삭제 중... / Deleting..." : "삭제 / Delete"}
       </button>
     </li>
   );

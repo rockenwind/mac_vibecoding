@@ -1,14 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
-import { GET } from "./route";
+import { DELETE, GET } from "./route";
 
 const mocks = vi.hoisted(() => ({
   readScanHistory: vi.fn(),
-  compareScanResults: vi.fn()
+  compareScanResults: vi.fn(),
+  deleteScan: vi.fn()
 }));
 
 vi.mock("@/lib/scanHistory/store", () => ({
   readScanHistory: mocks.readScanHistory,
-  compareScanResults: mocks.compareScanResults
+  compareScanResults: mocks.compareScanResults,
+  deleteScan: mocks.deleteScan
 }));
 
 const currentScan = {
@@ -76,6 +78,33 @@ describe("GET /api/scans/[scanId]", () => {
     mocks.readScanHistory.mockResolvedValue([]);
 
     const response = await GET(new Request("http://localhost/api/scans/missing"), {
+      params: Promise.resolve({ scanId: "missing" })
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(404);
+    expect(body.error).toBe("Scan was not found.");
+  });
+});
+
+describe("DELETE /api/scans/[scanId]", () => {
+  it("deletes a saved scan", async () => {
+    mocks.deleteScan.mockResolvedValue(true);
+
+    const response = await DELETE(new Request("http://localhost/api/scans/scan_current"), {
+      params: Promise.resolve({ scanId: "scan_current" })
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.deleted).toBe(true);
+    expect(mocks.deleteScan).toHaveBeenCalledWith("scan_current");
+  });
+
+  it("returns 404 when the scan id is not saved", async () => {
+    mocks.deleteScan.mockResolvedValue(false);
+
+    const response = await DELETE(new Request("http://localhost/api/scans/missing"), {
       params: Promise.resolve({ scanId: "missing" })
     });
     const body = await response.json();

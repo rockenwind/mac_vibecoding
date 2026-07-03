@@ -1,6 +1,7 @@
 import type { ScanResult } from "@/lib/scanner/types";
 import {
   compareScanResults,
+  deleteScan,
   readScanHistory
 } from "@/lib/scanHistory/store";
 import type { ScanHistoryEntry } from "@/lib/scanHistory/types";
@@ -31,6 +32,22 @@ export async function GET(_request: Request, context: RouteContext): Promise<Res
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not load saved scan.";
+    return Response.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function DELETE(_request: Request, context: RouteContext): Promise<Response> {
+  try {
+    const { scanId } = await context.params;
+    const deleted = await deleteScan(scanId);
+
+    if (!deleted) {
+      return Response.json({ error: "Scan was not found." }, { status: 404 });
+    }
+
+    return Response.json({ deleted: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not delete saved scan.";
     return Response.json({ error: message }, { status: 500 });
   }
 }

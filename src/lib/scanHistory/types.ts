@@ -8,6 +8,7 @@ export type ScanHistoryEntry = {
 export type ScanHistoryStore = {
   read(): Promise<ScanHistoryEntry[]>;
   record(scan: ScanResult, now?: Date): Promise<ScanHistoryEntry>;
+  delete(scanId: string): Promise<boolean>;
 };
 
 export type ScanComparison = {

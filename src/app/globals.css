@@ -288,6 +288,20 @@ h3 {
   background: #f9fafb;
 }
 
+.history-delete-button {
+  background: #ffffff;
+  border-color: #f1b4ad;
+  color: var(--critical);
+  flex: 0 0 auto;
+  margin-right: 12px;
+  min-height: 38px;
+  padding: 0 12px;
+}
+
+.history-delete-button:hover {
+  background: #fff5f5;
+}
+
 .history-button:disabled {
   cursor: wait;
   opacity: 0.72;
@@ -747,5 +761,10 @@ pre {
   .comparison-grid {
     display: grid;
     grid-template-columns: 1fr;
+  }
+
+  .history-delete-button {
+    margin: 0 12px 12px;
+    width: auto;
   }
 }

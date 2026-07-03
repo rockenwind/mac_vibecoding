@@ -41,6 +41,12 @@ describe("Home", () => {
             })
           };
         }
+        if (url === "/api/scans/scan_previous" && init?.method === "DELETE") {
+          return {
+            ok: true,
+            json: async () => ({ deleted: true })
+          };
+        }
         if (url === "/api/scans/scan_previous") {
           return {
             ok: true,
@@ -228,20 +234,38 @@ describe("Home", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Scan repository" }));
 
-    expect(await screen.findByRole("heading", { name: "위험 요약" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "위험 요약 / Risk summary" })).toBeInTheDocument();
     expect(screen.getByText("즉시 조치 필요")).toBeInTheDocument();
-    expect(screen.getByText("영향도")).toBeInTheDocument();
-    expect(screen.getByText("필요 조치")).toBeInTheDocument();
-    expect(screen.getByText("발견 근거")).toBeInTheDocument();
-    expect(screen.getByText("발견 위치")).toBeInTheDocument();
-    expect(screen.getByText("취약점")).toBeInTheDocument();
-    expect(screen.getByText("우선순위")).toBeInTheDocument();
+    expect(screen.getByText("영향도 / Impact")).toBeInTheDocument();
+    expect(screen.getByText("필요 조치 / Required action")).toBeInTheDocument();
+    expect(screen.getByText("발견 근거 / Evidence")).toBeInTheDocument();
+    expect(screen.getByText("발견 위치 / Location")).toBeInTheDocument();
+    expect(screen.getByText("취약점 / Vulnerability")).toBeInTheDocument();
+    expect(screen.getByText("우선순위 / Priority")).toBeInTheDocument();
+  });
+
+  it("renders core scan result labels in Korean and English", async () => {
+    render(<Home />);
+
+    fireEvent.change(screen.getByLabelText("GitHub repository URL"), {
+      target: { value: "https://github.com/example/repo" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Scan repository" }));
+
+    expect(await screen.findByRole("heading", { name: "위험 요약 / Risk summary" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "비교 / Comparison" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "발견 항목 / Findings" })).toBeInTheDocument();
+    expect(screen.getByText("취약점 / Vulnerability")).toBeInTheDocument();
+    expect(screen.getByText("필요 조치 / Required action")).toBeInTheDocument();
+    expect(screen.getByText("새로 발견 / New")).toBeInTheDocument();
+    expect(screen.getByText("해결됨 / Resolved")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "마크다운 보고서 / Markdown report" })).toBeInTheDocument();
   });
 
   it("loads and renders recent scan history", async () => {
     render(<Home />);
 
-    expect(await screen.findByText("Recent scans")).toBeInTheDocument();
+    expect(await screen.findByText("최근 스캔 / Recent scans")).toBeInTheDocument();
     expect(screen.getAllByText("example/repo").length).toBeGreaterThan(0);
     expect(screen.getByText("scan_previous")).toBeInTheDocument();
   });
@@ -249,13 +273,27 @@ describe("Home", () => {
   it("opens a saved scan from recent history with details and comparison", async () => {
     render(<Home />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /scan_previous/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "열기 / Open scan_previous" }));
 
     expect(await screen.findByText(/저장된 스캔을 보는 중/)).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "위험 요약" })).toBeInTheDocument();
-    expect(screen.getByText("필요 조치")).toBeInTheDocument();
-    expect(screen.getByText("Compared with scan_older")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "위험 요약 / Risk summary" })).toBeInTheDocument();
+    expect(screen.getByText("필요 조치 / Required action")).toBeInTheDocument();
+    expect(screen.getByText(/Compared with scan_older/)).toBeInTheDocument();
     expect(screen.getAllByText("Possible exposed credential").length).toBeGreaterThan(0);
+  });
+
+  it("deletes the open saved scan from recent history and clears the report", async () => {
+    render(<Home />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "열기 / Open scan_previous" }));
+    expect(await screen.findByText(/저장된 스캔을 보는 중/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "삭제 / Delete scan_previous" }));
+
+    await waitFor(() => {
+      expect(screen.queryByText("scan_previous")).not.toBeInTheDocument();
+    });
+    expect(screen.getByRole("heading", { name: "스캔 준비 / Ready to scan" })).toBeInTheDocument();
   });
 
   it("selects a GitHub App repository and fills scan inputs", async () => {
@@ -299,7 +337,7 @@ describe("Home", () => {
     const fetchMock = vi.mocked(fetch);
     render(<Home />);
 
-    await screen.findByText("Recent scans");
+    await screen.findByText("최근 스캔 / Recent scans");
     expect(fetchMock).toHaveBeenCalledWith("/api/scans");
     expect(screen.queryByRole("link", { name: "Job dashboard" })).not.toBeInTheDocument();
     expect(screen.queryByText("시장 수요 기반 추천 점검")).not.toBeInTheDocument();
@@ -316,12 +354,12 @@ describe("Home", () => {
     fireEvent.click(screen.getByRole("button", { name: "Scan repository" }));
 
     await waitFor(() => {
-      expect(screen.getByText("Comparison")).toBeInTheDocument();
+      expect(screen.getByText("비교 / Comparison")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("New")).toBeInTheDocument();
-    expect(screen.getByText("Resolved")).toBeInTheDocument();
-    expect(screen.getByText("Unchanged")).toBeInTheDocument();
+    expect(screen.getByText("새로 발견 / New")).toBeInTheDocument();
+    expect(screen.getByText("해결됨 / Resolved")).toBeInTheDocument();
+    expect(screen.getByText("유지됨 / Unchanged")).toBeInTheDocument();
     expect(screen.getAllByText("Possible exposed credential").length).toBeGreaterThan(0);
   });
 
@@ -334,14 +372,14 @@ describe("Home", () => {
     fireEvent.click(screen.getByRole("button", { name: "Scan repository" }));
 
     await waitFor(() => {
-      expect(screen.getByText("Compared with scan_previous")).toBeInTheDocument();
+      expect(screen.getByText(/Compared with scan_previous/)).toBeInTheDocument();
     });
 
-    expect(screen.getByRole("heading", { name: "New findings" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Resolved findings" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Unchanged findings" })).toBeInTheDocument();
-    expect(screen.getByText("No resolved findings.")).toBeInTheDocument();
-    expect(screen.getByText("No unchanged findings.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "새 발견 항목 / New findings" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "해결된 항목 / Resolved findings" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "유지된 항목 / Unchanged findings" })).toBeInTheDocument();
+    expect(screen.getByText("해결된 항목이 없습니다. / No resolved findings.")).toBeInTheDocument();
+    expect(screen.getByText("유지된 항목이 없습니다. / No unchanged findings.")).toBeInTheDocument();
   });
 
   it("shows a Markdown report download link after a repository scan", async () => {
@@ -352,7 +390,7 @@ describe("Home", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Scan repository" }));
 
-    const link = await screen.findByRole("link", { name: "Markdown report" });
+    const link = await screen.findByRole("link", { name: "마크다운 보고서 / Markdown report" });
 
     expect(link).toHaveAttribute("href", "/api/scans/scan_test/markdown");
   });
