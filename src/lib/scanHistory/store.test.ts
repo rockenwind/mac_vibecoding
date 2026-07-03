@@ -6,6 +6,7 @@ import {
   compareScanResults,
   createJsonScanHistoryStore,
   createSqliteScanHistoryStore,
+  deleteScan,
   readScanHistory,
   recordScan
 } from "./store";
@@ -67,6 +68,15 @@ describe("scan history store", () => {
     expect(history.map((entry) => entry.scan.id)).toEqual(["scan_new", "scan_old"]);
   });
 
+  it("deletes a saved scan from the default JSON history store", async () => {
+    await recordScan({ ...baseScan, id: "scan_old" }, new Date("2026-07-01T00:00:00Z"));
+    await recordScan({ ...baseScan, id: "scan_new" }, new Date("2026-07-02T00:00:00Z"));
+
+    await expect(deleteScan("scan_old")).resolves.toBe(true);
+    await expect(readScanHistory()).resolves.toMatchObject([{ scan: { id: "scan_new" } }]);
+    await expect(deleteScan("missing")).resolves.toBe(false);
+  });
+
   it("can read and write through an injected JSON history store", async () => {
     const store = createJsonScanHistoryStore(join(tempDir, "custom", "history.json"));
 
@@ -91,6 +101,17 @@ describe("scan history store", () => {
         scan: { id: "scan_sqlite" }
       }
     ]);
+  });
+
+  it("can delete a saved scan through an injected SQLite history store", async () => {
+    const store = createSqliteScanHistoryStore(join(tempDir, "scans.sqlite"));
+
+    await store.record({ ...baseScan, id: "scan_sqlite_old" }, new Date("2026-07-01T00:00:00Z"));
+    await store.record({ ...baseScan, id: "scan_sqlite_new" }, new Date("2026-07-02T00:00:00Z"));
+
+    await expect(store.delete("scan_sqlite_old")).resolves.toBe(true);
+    await expect(store.read()).resolves.toMatchObject([{ scan: { id: "scan_sqlite_new" } }]);
+    await expect(store.delete("missing")).resolves.toBe(false);
   });
 
   it("uses SQLite as the default store when SCAN_HISTORY_DATABASE_URL is configured", async () => {

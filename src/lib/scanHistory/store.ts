@@ -14,6 +14,10 @@ export async function recordScan(scan: ScanResult, now = new Date()): Promise<Sc
   return createDefaultScanHistoryStore().record(scan, now);
 }
 
+export async function deleteScan(scanId: string): Promise<boolean> {
+  return createDefaultScanHistoryStore().delete(scanId);
+}
+
 export function createJsonScanHistoryStore(historyFile: string): ScanHistoryStore {
   return {
     async read(): Promise<ScanHistoryEntry[]> {
@@ -55,6 +59,20 @@ export function createJsonScanHistoryStore(historyFile: string): ScanHistoryStor
       await writeFile(historyFile, `${JSON.stringify(nextHistory, null, 2)}\n`, "utf8");
 
       return entry;
+    },
+
+    async delete(scanId: string): Promise<boolean> {
+      const history = await this.read();
+      const nextHistory = history.filter((entry) => entry.scan.id !== scanId);
+
+      if (nextHistory.length === history.length) {
+        return false;
+      }
+
+      await mkdir(dirname(historyFile), { recursive: true });
+      await writeFile(historyFile, `${JSON.stringify(nextHistory, null, 2)}\n`, "utf8");
+
+      return true;
     }
   };
 }
@@ -109,6 +127,20 @@ export function createSqliteScanHistoryStore(databaseFile: string): ScanHistoryS
       }
 
       return entry;
+    },
+
+    async delete(scanId: string): Promise<boolean> {
+      await mkdir(dirname(databaseFile), { recursive: true });
+      const database = await openScanHistoryDatabase(databaseFile);
+
+      try {
+        const result = database.prepare("DELETE FROM scan_history WHERE id = ?").run(scanId) as {
+          changes?: number;
+        };
+        return Number(result.changes ?? 0) > 0;
+      } finally {
+        database.close();
+      }
     }
   };
 }

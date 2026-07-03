@@ -259,13 +259,52 @@ h3 {
   display: flex;
   gap: 12px;
   justify-content: space-between;
-  padding: 12px;
+  padding: 0;
 }
 
 .history-list div {
   display: grid;
   gap: 4px;
   min-width: 0;
+}
+
+.history-button {
+  align-items: center;
+  background: #ffffff;
+  border: 0;
+  border-radius: 6px;
+  color: var(--text);
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-height: 0;
+  padding: 12px;
+  text-align: left;
+  white-space: normal;
+  width: 100%;
+}
+
+.history-button:hover {
+  background: #f9fafb;
+}
+
+.history-delete-button {
+  background: #ffffff;
+  border-color: #f1b4ad;
+  color: var(--critical);
+  flex: 0 0 auto;
+  margin-right: 12px;
+  min-height: 38px;
+  padding: 0 12px;
+}
+
+.history-delete-button:hover {
+  background: #fff5f5;
+}
+
+.history-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
 }
 
 .history-list strong,
@@ -284,6 +323,22 @@ h3 {
 .history-list small {
   font-size: 0.86rem;
   line-height: 1.4;
+}
+
+.history-top-risk {
+  color: var(--text) !important;
+  font-weight: 700;
+}
+
+.saved-scan-note {
+  background: #f2f4f7;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  margin: 12px 0 0;
+  padding: 10px;
 }
 
 .results-grid {
@@ -432,6 +487,46 @@ h3 {
   padding-top: 16px;
 }
 
+.risk-summary {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+  padding-top: 16px;
+}
+
+.risk-summary p {
+  line-height: 1.5;
+  margin: 0;
+}
+
+.risk-summary-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.risk-summary-grid div {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  display: grid;
+  gap: 5px;
+  padding: 10px;
+}
+
+.risk-summary-grid span,
+.risk-summary-grid small {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.risk-summary-grid strong {
+  font-size: 1.45rem;
+  line-height: 1;
+}
+
 .comparison-grid {
   display: grid;
   gap: 8px;
@@ -525,6 +620,24 @@ h3 {
   gap: 10px;
 }
 
+.finding-priority-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.finding-priority-row span {
+  background: #f2f4f7;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.2;
+  padding: 6px 9px;
+}
+
 .severity-badge {
   border: 1px solid currentColor;
   border-radius: 999px;
@@ -547,6 +660,7 @@ h3 {
 .finding-details {
   display: grid;
   gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin: 16px 0 0;
 }
 
@@ -638,9 +752,19 @@ pre {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .finding-details,
+  .risk-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
   .history-list li,
   .comparison-grid {
     display: grid;
     grid-template-columns: 1fr;
+  }
+
+  .history-delete-button {
+    margin: 0 12px 12px;
+    width: auto;
   }
 }
