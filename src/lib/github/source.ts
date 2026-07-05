@@ -10,6 +10,9 @@ type GitHubTreeItem = {
 
 const GITHUB_JSON_HEADERS = { Accept: "application/vnd.github+json" };
 const RATE_LIMIT_MESSAGE = "GitHub rate limit reached. Try again later.";
+const REPOSITORY_NOT_FOUND_OR_PRIVATE_MESSAGE =
+  "Repository was not found or private access requires GitHub App installation.";
+const GITHUB_APP_PERMISSION_MESSAGE = "GitHub App permission was denied.";
 const MAX_FILES_TO_FETCH = 200;
 
 type FetchRepositoryFilesOptions = {
@@ -32,11 +35,7 @@ export async function fetchRepositoryFiles(
     headers: jsonHeaders
   });
 
-  if (metadataResponse.status === 404) {
-    throw new Error("Repository was not found or is not public.");
-  }
-
-  throwIfRateLimited(metadataResponse);
+  await throwIfGitHubAccessFailed(metadataResponse, options.accessToken);
 
   if (!metadataResponse.ok) {
     throw new Error("GitHub repository metadata could not be fetched.");
@@ -49,7 +48,7 @@ export async function fetchRepositoryFiles(
     { headers: jsonHeaders }
   );
 
-  throwIfRateLimited(treeResponse);
+  await throwIfGitHubAccessFailed(treeResponse, options.accessToken);
 
   if (!treeResponse.ok) {
     throw new Error("GitHub repository file tree could not be fetched.");
@@ -76,7 +75,7 @@ export async function fetchRepositoryFiles(
       ? await fetch(rawUrl, { headers: { Authorization: `Bearer ${options.accessToken}` } })
       : await fetch(rawUrl);
 
-    throwIfRateLimited(rawResponse);
+    await throwIfGitHubAccessFailed(rawResponse, options.accessToken);
 
     if (!rawResponse.ok) {
       warnings.push({ message: `Could not fetch ${item.path}.` });
@@ -103,10 +102,36 @@ export async function fetchRepositoryFiles(
   };
 }
 
-function throwIfRateLimited(response: Response): void {
-  if (response.status === 403 || response.status === 429) {
+async function throwIfGitHubAccessFailed(response: Response, accessToken?: string): Promise<void> {
+  if (response.status === 429) {
     throw new Error(RATE_LIMIT_MESSAGE);
   }
+
+  if (response.status === 403) {
+    const rateLimitRemaining = response.headers.get("x-ratelimit-remaining");
+    const message = await readGitHubErrorMessage(response);
+    if (rateLimitRemaining === "0" || isRateLimitMessage(message)) {
+      throw new Error(RATE_LIMIT_MESSAGE);
+    }
+    throw new Error(accessToken ? GITHUB_APP_PERMISSION_MESSAGE : REPOSITORY_NOT_FOUND_OR_PRIVATE_MESSAGE);
+  }
+
+  if (response.status === 404) {
+    throw new Error(accessToken ? GITHUB_APP_PERMISSION_MESSAGE : REPOSITORY_NOT_FOUND_OR_PRIVATE_MESSAGE);
+  }
+}
+
+async function readGitHubErrorMessage(response: Response): Promise<string> {
+  try {
+    const body = (await response.clone().json()) as { message?: unknown };
+    return typeof body.message === "string" ? body.message : "";
+  } catch {
+    return "";
+  }
+}
+
+function isRateLimitMessage(message: string): boolean {
+  return /rate limit|secondary rate limit|abuse detection/i.test(message);
 }
 
 function githubJsonHeaders(accessToken?: string): HeadersInit {

@@ -50,6 +50,7 @@ type ScanResponse = {
   history?: ScanHistoryEntry;
   comparison?: ScanComparison;
   error?: string;
+  action?: string;
 };
 
 type SavedScanResponse = ScanResponse;
@@ -171,6 +172,7 @@ export default function Home() {
   const [scanHistory, setScanHistory] = useState<ScanHistoryEntry[]>([]);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorAction, setErrorAction] = useState<string | null>(null);
   const [savedScanError, setSavedScanError] = useState<string | null>(null);
   const [deleteScanError, setDeleteScanError] = useState<string | null>(null);
   const [issueError, setIssueError] = useState<string | null>(null);
@@ -433,6 +435,7 @@ export default function Home() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+    setErrorAction(null);
     setSavedScanError(null);
     setDeleteScanError(null);
     setIssueError(null);
@@ -454,6 +457,7 @@ export default function Home() {
       const data = (await response.json()) as ScanResponse;
 
       if (!response.ok) {
+        setErrorAction(data.action ?? null);
         throw new Error(data.error ?? "Scan failed. Check the repository URL and try again.");
       }
 
@@ -478,6 +482,7 @@ export default function Home() {
       setScan(null);
       setComparison(null);
       setError(message);
+      setErrorAction((current) => current ?? null);
       setScanProgress("실패 / Failed");
     } finally {
       setIsScanning(false);
@@ -519,6 +524,7 @@ export default function Home() {
     setSavedScanError(null);
     setDeleteScanError(null);
     setError(null);
+    setErrorAction(null);
     setIssueError(null);
     setIssueUrl(null);
     setIsLoadingSavedScanId(scanId);
@@ -708,6 +714,7 @@ export default function Home() {
         {error ? (
           <div className="status-message status-error" role="alert">
             {error}
+            {errorAction ? <p>조치 / Action: {errorAction}</p> : null}
           </div>
         ) : null}
 

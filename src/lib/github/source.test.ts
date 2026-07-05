@@ -63,6 +63,53 @@ describe("fetchRepositoryFiles", () => {
     ).rejects.toThrow("GitHub rate limit reached. Try again later.");
   });
 
+  it("explains that a missing public repository may need URL correction or GitHub App access", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(null, { status: 404 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      fetchRepositoryFiles({
+        owner: "example",
+        name: "private-repo",
+        url: "https://github.com/example/private-repo"
+      })
+    ).rejects.toThrow("Repository was not found or private access requires GitHub App installation.");
+  });
+
+  it("keeps permission denied errors distinct when an installation token is provided", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(null, { status: 403 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      fetchRepositoryFiles(
+        {
+          owner: "example",
+          name: "private-repo",
+          url: "https://github.com/example/private-repo"
+        },
+        { accessToken: "installation-token" }
+      )
+    ).rejects.toThrow("GitHub App permission was denied.");
+  });
+
+  it("maps secondary GitHub rate limits from 403 response bodies", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      Response.json(
+        { message: "You have exceeded a secondary rate limit. Please wait a few minutes before you try again." },
+        { status: 403 }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      fetchRepositoryFiles({
+        owner: "example",
+        name: "repo",
+        url: "https://github.com/example/repo"
+      })
+    ).rejects.toThrow("GitHub rate limit reached. Try again later.");
+  });
+
   it("adds authorization headers when an access token is provided", async () => {
     const fetchMock = vi
       .fn()

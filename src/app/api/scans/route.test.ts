@@ -247,6 +247,59 @@ describe("POST /api/scans", () => {
     expect(response.status).toBe(429);
     expect(body.error).toBe("GitHub rate limit reached. Try again later.");
   });
+
+  it("returns 404 with action when a repository is missing or private access needs GitHub App installation", async () => {
+    mocks.fetchRepositoryFiles.mockRejectedValueOnce(
+      new Error("Repository was not found or private access requires GitHub App installation.")
+    );
+
+    const response = await POST(
+      new Request("http://localhost/api/scans", {
+        method: "POST",
+        body: JSON.stringify({ repositoryUrl: "https://github.com/example/private-repo" })
+      })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(404);
+    expect(body.error).toBe("Repository was not found or private access requires GitHub App installation.");
+    expect(body.action).toBe("저장소 URL을 확인하거나 GitHub App 저장소 선택으로 다시 스캔하세요. / Check the repository URL or retry by selecting a GitHub App repository.");
+  });
+
+  it("returns 403 with action when GitHub App permission is denied", async () => {
+    mocks.fetchRepositoryFiles.mockRejectedValueOnce(new Error("GitHub App permission was denied."));
+
+    const response = await POST(
+      new Request("http://localhost/api/scans", {
+        method: "POST",
+        body: JSON.stringify({ repositoryUrl: "https://github.com/example/private-repo", installationId: 123 })
+      })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(body.error).toBe("GitHub App permission was denied.");
+    expect(body.action).toBe("GitHub App 설치 권한과 Repository contents 읽기 권한을 확인하세요. / Check the GitHub App installation and Repository contents read permission.");
+  });
+
+  it("returns 503 with action when GitHub App is not configured for private scans", async () => {
+    mocks.readGitHubAppConfig.mockReturnValue({
+      configured: false,
+      missing: ["GITHUB_APP_ID", "GITHUB_APP_PRIVATE_KEY"]
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/scans", {
+        method: "POST",
+        body: JSON.stringify({ repositoryUrl: "https://github.com/example/private-repo", installationId: 123 })
+      })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body.error).toBe("GitHub App is not configured.");
+    expect(body.action).toBe("서버의 GitHub App 환경 변수를 설정한 뒤 다시 시도하세요. / Configure GitHub App environment variables and retry.");
+  });
 });
 
 describe("GET /api/scans", () => {

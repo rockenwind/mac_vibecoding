@@ -507,6 +507,49 @@ describe("Home", () => {
     expect(await screen.findByText("GitHub App is not configured.")).toBeInTheDocument();
   });
 
+  it("shows scan failure action guidance when the API returns one", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = input.toString();
+        if (url === "/api/github/installations") {
+          return { ok: true, json: async () => ({ installations: [] }) };
+        }
+        if (url === "/api/scans/settings") {
+          return { ok: true, json: async () => ({ settings: { baselines: [], suppressions: [], rules: [] }, rules: [] }) };
+        }
+        if (url === "/api/scans" && !init) {
+          return { ok: true, json: async () => ({ history: [] }) };
+        }
+        if (url === "/api/scans" && init?.method === "POST") {
+          return {
+            ok: false,
+            json: async () => ({
+              error: "Repository was not found or private access requires GitHub App installation.",
+              action:
+                "저장소 URL을 확인하거나 GitHub App 저장소 선택으로 다시 스캔하세요. / Check the repository URL or retry by selecting a GitHub App repository."
+            })
+          };
+        }
+        throw new Error(`Unexpected request: ${url}`);
+      })
+    );
+
+    render(<Home />);
+
+    fireEvent.change(screen.getByLabelText("GitHub repository URL"), {
+      target: { value: "https://github.com/example/private-repo" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Scan repository" }));
+
+    expect(await screen.findByText("Repository was not found or private access requires GitHub App installation.")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "조치 / Action: 저장소 URL을 확인하거나 GitHub App 저장소 선택으로 다시 스캔하세요. / Check the repository URL or retry by selecting a GitHub App repository."
+      )
+    ).toBeInTheDocument();
+  });
+
   it("does not show Security and Network Jobs content", async () => {
     const fetchMock = vi.mocked(fetch);
     render(<Home />);
