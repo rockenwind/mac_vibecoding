@@ -8,6 +8,17 @@ import { findingFingerprint } from "./fingerprint";
 
 const defaultHistoryFile = join(process.cwd(), ".data", "scans.json");
 
+type QueryResult<Row> = {
+  rows: Row[];
+  rowCount?: number | null;
+};
+
+type PostgresPoolLike = {
+  query<Row = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<QueryResult<Row>>;
+};
+
+type PostgresPoolFactory = (connectionString: string) => PostgresPoolLike | Promise<PostgresPoolLike>;
+
 export async function readScanHistory(): Promise<ScanHistoryEntry[]> {
   return createDefaultScanHistoryStore().read();
 }
@@ -80,12 +91,69 @@ export function createJsonScanHistoryStore(historyFile: string): ScanHistoryStor
 }
 
 export function createDefaultScanHistoryStore(): ScanHistoryStore {
-  const databaseFile = getSqliteDatabaseFile();
-  if (databaseFile) {
-    return createSqliteScanHistoryStore(databaseFile);
+  const databaseUrl = process.env.SCAN_HISTORY_DATABASE_URL;
+  if (isPostgresUrl(databaseUrl)) {
+    return createPostgresScanHistoryStore(databaseUrl);
+  }
+
+  const sqliteDatabaseFile = getSqliteDatabaseFile(databaseUrl);
+  if (sqliteDatabaseFile) {
+    return createSqliteScanHistoryStore(sqliteDatabaseFile);
   }
 
   return createJsonScanHistoryStore(getHistoryFile());
+}
+
+export function createPostgresScanHistoryStore(
+  connectionString: string,
+  poolFactory: PostgresPoolFactory = createPostgresPool
+): ScanHistoryStore {
+  let poolPromise: Promise<PostgresPoolLike> | null = null;
+
+  async function pool(): Promise<PostgresPoolLike> {
+    poolPromise ??= Promise.resolve(poolFactory(connectionString)).then(async (created) => {
+      await ensurePostgresScanHistorySchema(created);
+      return created;
+    });
+    return poolPromise;
+  }
+
+  return {
+    async read(): Promise<ScanHistoryEntry[]> {
+      const database = await pool();
+      const result = await database.query<{ saved_at: string; scan_json: unknown }>(
+        "SELECT saved_at, scan_json FROM scan_history ORDER BY saved_at DESC"
+      );
+
+      return result.rows.map((row) => ({
+        savedAt: row.saved_at,
+        scan: normalizePostgresJson(row.scan_json) as ScanResult
+      }));
+    },
+
+    async record(scan: ScanResult, now = new Date()): Promise<ScanHistoryEntry> {
+      const database = await pool();
+      const entry: ScanHistoryEntry = {
+        savedAt: now.toISOString(),
+        scan
+      };
+
+      await database.query(
+        `INSERT INTO scan_history (id, saved_at, scan_json)
+         VALUES ($1, $2, $3)
+         ON CONFLICT(id) DO UPDATE SET saved_at = excluded.saved_at, scan_json = excluded.scan_json`,
+        [scan.id, entry.savedAt, scan]
+      );
+
+      return entry;
+    },
+
+    async delete(scanId: string): Promise<boolean> {
+      const database = await pool();
+      const result = await database.query("DELETE FROM scan_history WHERE id = $1", [scanId]);
+      return Number(result.rowCount ?? 0) > 0;
+    }
+  };
 }
 
 export function createSqliteScanHistoryStore(databaseFile: string): ScanHistoryStore {
@@ -249,8 +317,7 @@ function getHistoryFile(): string {
   return process.env.SCAN_HISTORY_FILE ?? defaultHistoryFile;
 }
 
-function getSqliteDatabaseFile(): string | null {
-  const value = process.env.SCAN_HISTORY_DATABASE_URL;
+function getSqliteDatabaseFile(value = process.env.SCAN_HISTORY_DATABASE_URL): string | null {
   if (!value?.startsWith("sqlite:")) {
     return null;
   }
@@ -261,6 +328,32 @@ function getSqliteDatabaseFile(): string | null {
   }
 
   return databaseFile;
+}
+
+function isPostgresUrl(value: string | undefined): value is string {
+  return Boolean(value?.startsWith("postgres://") || value?.startsWith("postgresql://"));
+}
+
+async function createPostgresPool(connectionString: string): Promise<PostgresPoolLike> {
+  const { Pool } = await import("pg");
+  return new Pool({ connectionString }) as PostgresPoolLike;
+}
+
+async function ensurePostgresScanHistorySchema(database: PostgresPoolLike): Promise<void> {
+  await database.query(`
+    CREATE TABLE IF NOT EXISTS scan_history (
+      id TEXT PRIMARY KEY,
+      saved_at TEXT NOT NULL,
+      scan_json JSONB NOT NULL
+    )
+  `);
+}
+
+function normalizePostgresJson(value: unknown): unknown {
+  if (typeof value === "string") {
+    return JSON.parse(value);
+  }
+  return value;
 }
 
 async function openScanHistoryDatabase(databaseFile: string): Promise<DatabaseSync> {

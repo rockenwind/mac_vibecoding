@@ -7,12 +7,14 @@ Repository scan 서비스는 예약 스캔 실행 API를 제공합니다. Render
 - Repository scan 웹 서비스가 Render에 배포되어 있어야 합니다.
 - 웹 서비스 환경 변수에 GitHub App 설정이 있어야 합니다.
 - 웹 서비스와 Cron Job이 같은 `SCHEDULE_RUN_TOKEN` 값을 사용해야 합니다.
+- 웹 서비스 환경 변수에 Postgres 또는 Neon `SCAN_HISTORY_DATABASE_URL`이 설정되어 있어야 합니다.
 
 ## 환경 변수
 
 웹 서비스에 다음 값을 추가합니다.
 
 ```text
+SCAN_HISTORY_DATABASE_URL=postgresql://user:password@host/database?sslmode=require
 SCHEDULE_RUN_TOKEN=충분히-긴-무작위-문자열
 ```
 
@@ -23,7 +25,7 @@ APP_URL=https://your-repository-scan-service.onrender.com
 SCHEDULE_RUN_TOKEN=웹-서비스와-같은-값
 ```
 
-`SCHEDULE_RUN_TOKEN`은 외부에 노출하지 않습니다. 값이 다르면 예약 실행 API는 `401`을 반환합니다.
+`SCAN_HISTORY_DATABASE_URL`은 예약 스캔 이력과 예약 설정을 안정적으로 보관하는 운영 데이터베이스입니다. `SCHEDULE_RUN_TOKEN`은 외부에 노출하지 않습니다. 값이 다르면 예약 실행 API는 `401`을 반환합니다.
 
 ## Cron Job 설정
 
