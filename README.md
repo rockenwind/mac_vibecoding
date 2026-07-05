@@ -6,14 +6,108 @@
 
 - 공개 GitHub 저장소 코드 점검
 - GitHub App 설치 목록에서 점검할 저장소 선택
+- GitHub App 설치 토큰 기반 비공개 저장소 점검
 - 비밀값 노출, 위험한 코드 실행, 프롬프트 노출, 도구 권한, MCP 관련 위험 탐지
 - 심각도별 요약 표시
 - 발견 항목별 취약점, 영향도, 발견 근거, 필요 조치 제공
-- 최근 스캔 이력 저장과 직전 결과 비교
+- 최근 스캔 이력 저장과 직전 결과 또는 기준선 비교
 - 최근 스캔 이력에서 과거 결과 다시 열기
 - 최근 스캔 이력 수동 삭제
-- 원본 점검 결과를 JSON 또는 Markdown 보고서로 확인
+- 스캔별 기준선 지정
+- 새 발견, 해결됨, 유지됨, 오탐 처리 항목 분리
+- 규칙별 사용 여부 설정
+- 원본 점검 결과를 JSON, Markdown 보고서, 보안 체크리스트로 확인
+- GitHub Issue 생성
 - GitHub App 설치 목록과 설치 저장소 목록 조회 API
+
+## 제품 요약
+
+이 서비스는 GitHub 저장소의 코드를 가져와 AI 애플리케이션과 개발 도구에서 자주 발생하는 보안 위험을 규칙 기반으로 점검합니다. 공개 저장소는 URL만으로 점검하고, 비공개 저장소는 GitHub App 설치 권한을 사용합니다.
+
+```mermaid
+flowchart LR
+  User["사용자"] --> Web["웹 화면"]
+  Web --> ScanAPI["스캔 API"]
+  Web --> GitHubPicker["GitHub App 저장소 선택 API"]
+  GitHubPicker --> GitHubApp["GitHub App"]
+  ScanAPI --> GitHubSource["GitHub 파일 수집"]
+  GitHubSource --> PublicRepo["공개 저장소"]
+  GitHubSource --> PrivateRepo["비공개 저장소"]
+  ScanAPI --> Scanner["규칙 기반 분석기"]
+  Scanner --> History["스캔 이력 저장소"]
+  History --> Reports["보고서와 체크리스트"]
+  History --> Baseline["기준선과 오탐 설정"]
+```
+
+## 스캔 실행 흐름
+
+```mermaid
+sequenceDiagram
+  participant U as 사용자
+  participant W as 웹 화면
+  participant A as 스캔 API
+  participant G as GitHub
+  participant S as 분석기
+  participant H as 이력 저장소
+
+  U->>W: 저장소 URL 입력 또는 GitHub App 저장소 선택
+  W->>A: POST /api/scans
+  A->>G: 저장소 메타데이터와 파일 트리 조회
+  G-->>A: 파일 목록과 원문
+  A->>S: 규칙 기반 점검 실행
+  S-->>A: 발견 항목과 심각도 요약
+  A->>H: 스캔 결과 저장
+  H-->>A: 직전 스캔 또는 기준선 비교
+  A-->>W: 스캔 결과, 비교 결과, 오탐 분리 결과
+  W-->>U: 카드형 결과와 보고서 링크 표시
+```
+
+## 구현된 기능 스펙
+
+| 영역 | 현재 상태 | 설명 |
+| --- | --- | --- |
+| 공개 저장소 스캔 | 완료 | `github.com` 저장소 URL을 입력해 스캔합니다. |
+| 비공개 저장소 스캔 | 완료 | GitHub App installation ID와 설치 토큰으로 접근합니다. |
+| 비공개 저장소 오류 안내 | 완료 | 인증 누락, 권한 부족, 설정 누락, rate limit을 구분합니다. |
+| 저장소 선택 UI | 완료 | GitHub App 설치 목록과 접근 가능한 저장소 목록을 불러옵니다. |
+| 규칙 기반 분석 | 완료 | 비밀값, 위험한 실행, 프롬프트 주입, MCP, API 인증/권한 검토 항목을 탐지합니다. |
+| 상세 카드 | 완료 | 취약점, 우선순위, 위치, 근거, 영향도, 필요 조치를 표시합니다. |
+| 스캔 이력 | 완료 | JSON 또는 SQLite에 저장하고 과거 결과를 다시 열 수 있습니다. |
+| 비교 | 완료 | 기준선이 있으면 기준선과 비교하고, 없으면 직전 스캔과 비교합니다. |
+| 오탐 처리 | 완료 | 오탐 항목을 기본 목록과 보고서에서 제외하고 해제할 수 있습니다. |
+| 규칙 설정 | 완료 | 규칙별 사용 여부를 조정하고 새 스캔에 반영합니다. |
+| 내보내기 | 완료 | Markdown 보고서와 보안 체크리스트를 내려받을 수 있습니다. |
+| GitHub Issue 생성 | 완료 | GitHub App 설치 권한으로 현재 스캔 결과를 Issue로 생성합니다. |
+
+## API 요약
+
+| API | 용도 |
+| --- | --- |
+| `GET /api/github/installations` | GitHub App 설치 목록 조회 |
+| `GET /api/github/repositories?installationId=123` | 설치별 접근 가능 저장소 목록 조회 |
+| `GET /api/scans` | 최근 스캔 이력 조회 |
+| `POST /api/scans` | 저장소 스캔 실행 |
+| `GET /api/scans/{scanId}` | 저장된 스캔 상세 재조회 |
+| `DELETE /api/scans/{scanId}` | 저장된 스캔 삭제 |
+| `GET /api/scans/{scanId}/markdown` | Markdown 상세 보고서 다운로드 |
+| `GET /api/scans/{scanId}/checklist` | 보안 조치 체크리스트 다운로드 |
+| `POST /api/scans/{scanId}/github-issue` | 스캔 결과 GitHub Issue 생성 |
+| `GET /api/scans/settings` | 기준선, 오탐, 규칙 설정 조회 |
+| `PATCH /api/scans/settings` | 기준선 지정, 오탐 처리, 규칙 사용 여부 변경 |
+
+## 데이터 흐름과 저장 항목
+
+```mermaid
+flowchart TD
+  Scan["스캔 결과"] --> HistoryJson[".data/scans.json"]
+  Scan --> HistorySqlite["SQLite 선택 저장"]
+  Settings["스캔 설정"] --> SettingsJson[".data/scan-settings.json"]
+  Settings --> SettingsSqlite["SQLite 선택 저장"]
+  HistoryJson --> Replay["과거 스캔 재조회"]
+  SettingsJson --> BaselineCompare["기준선 비교"]
+  SettingsJson --> Suppression["오탐 제외"]
+  SettingsJson --> RuleToggle["규칙 사용 여부"]
+```
 
 ## 화면에서 할 수 있는 일
 
@@ -25,7 +119,9 @@
 6. 직전 스캔과 비교해 새 발견, 해결됨, 유지 중 항목을 확인합니다.
 7. 최근 스캔 이력을 클릭해 과거 결과와 비교 내용을 다시 확인합니다.
 8. 더 이상 필요 없는 최근 스캔 이력은 삭제 버튼으로 정리합니다.
-9. 필요하면 JSON 보고서를 열거나 Markdown 보고서를 내려받아 상세 결과를 확인합니다.
+9. 기준선 지정, 오탐 처리, 규칙 사용 여부를 조정합니다.
+10. 필요하면 JSON 보고서를 열거나 Markdown 보고서와 보안 체크리스트를 내려받아 상세 결과를 확인합니다.
+11. GitHub App installation ID가 있으면 GitHub Issue를 생성합니다.
 
 ## 스캔 이력 저장
 
@@ -135,13 +231,14 @@ pnpm run github:check
 
 - 공개 `github.com` 저장소는 주소 입력만으로 점검합니다.
 - GitHub App 설치가 설정된 경우 권한이 있는 저장소를 선택해 점검할 수 있습니다.
+- 비공개 저장소는 GitHub App installation ID가 있어야 점검할 수 있습니다.
 - 점검은 규칙 기반으로 동작합니다.
-- 스캔 이력은 로컬 파일에 저장합니다.
+- 스캔 이력과 설정은 로컬 파일 또는 SQLite에 저장합니다.
 - 사용자 계정, 팀 권한 관리, 원격 저장 결과 관리는 아직 포함하지 않습니다.
 - 외부 대시보드나 별도 업무 데이터 없이 독립적으로 동작합니다.
 
 ## 다음 로드맵
 
-- 비공개 저장소 점검 실행 안정화
-- 스캔 결과를 이슈나 보안 체크리스트로 내보내기
 - 팀별 규칙 설정과 예외 관리
+- 예약 스캔과 변경 알림
+- PR 체크 또는 코멘트 연동
