@@ -21,7 +21,7 @@ export async function POST(request: Request): Promise<Response> {
 
     const { scan, history, comparison } = await runRepositoryScan({
       repositoryUrl: body.repositoryUrl,
-      installationId: body.installationId
+      installationId: readInstallationId(body.installationId)
     });
 
     return Response.json({ scan, history, comparison });
@@ -30,4 +30,11 @@ export async function POST(request: Request): Promise<Response> {
     const { status, action } = scanErrorResponse(message);
     return Response.json({ error: message, ...(action ? { action } : {}) }, { status });
   }
+}
+
+function readInstallationId(value: unknown): string | number | null {
+  if (typeof value === "string" || typeof value === "number") {
+    return value;
+  }
+  return null;
 }
