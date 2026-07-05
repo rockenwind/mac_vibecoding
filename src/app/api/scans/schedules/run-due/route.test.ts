@@ -20,6 +20,7 @@ vi.mock("@/lib/scans/runRepositoryScan", () => ({
 describe("POST /api/scans/schedules/run-due", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    delete process.env.SCHEDULE_RUN_TOKEN;
     mocks.markScanScheduleRun.mockResolvedValue({ baselines: [], suppressions: [], rules: [], schedules: [] });
     mocks.runRepositoryScan.mockResolvedValue({
       scan: {
@@ -44,6 +45,43 @@ describe("POST /api/scans/schedules/run-due", () => {
         suppressedFindings: []
       }
     });
+  });
+
+  it("requires a bearer token when SCHEDULE_RUN_TOKEN is configured", async () => {
+    process.env.SCHEDULE_RUN_TOKEN = "secret-cron-token";
+
+    const response = await POST(
+      new Request("http://localhost/api/scans/schedules/run-due", {
+        method: "POST",
+        body: JSON.stringify({ now: "2026-07-05T00:00:00.000Z" })
+      })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body.error).toBe("Scheduled scan token is required.");
+    expect(mocks.readScanSettings).not.toHaveBeenCalled();
+  });
+
+  it("accepts the configured bearer token", async () => {
+    process.env.SCHEDULE_RUN_TOKEN = "secret-cron-token";
+    mocks.readScanSettings.mockResolvedValue({
+      baselines: [],
+      suppressions: [],
+      rules: [],
+      schedules: []
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/scans/schedules/run-due", {
+        method: "POST",
+        headers: { Authorization: "Bearer secret-cron-token" },
+        body: JSON.stringify({ now: "2026-07-05T00:00:00.000Z" })
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.readScanSettings).toHaveBeenCalled();
   });
 
   it("returns no results when no schedules are due", async () => {

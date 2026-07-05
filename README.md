@@ -143,7 +143,22 @@ flowchart TD
 - 오탐 처리된 항목
 - 알림 후보 메시지
 
-외부 자동 호출은 후속 단계에서 맥 자동 실행, Render Cron, GitHub Actions, 또는 별도 작업 서버로 연결할 수 있습니다.
+운영 환경에서는 Render Cron으로 `run-due` API를 주기 호출합니다. 이 API는 `SCHEDULE_RUN_TOKEN`이 설정되어 있으면 `Authorization` 헤더의 Bearer 토큰이 일치할 때만 실행됩니다.
+
+Render 웹 서비스 환경 변수에 다음 값을 추가합니다.
+
+```text
+SCHEDULE_RUN_TOKEN=충분히-긴-무작위-문자열
+```
+
+Render Cron Job은 다음 요청을 실행하도록 설정합니다.
+
+```bash
+curl -X POST "$APP_URL/api/scans/schedules/run-due" \
+  -H "Authorization: Bearer $SCHEDULE_RUN_TOKEN"
+```
+
+권장 주기는 1시간입니다. 스캔 실행 여부는 각 저장소의 `nextRunAt`으로 다시 판단하므로, Cron이 자주 호출되어도 실행 시간이 지난 예약만 스캔합니다.
 
 ## 스캔 이력 저장
 
