@@ -985,6 +985,9 @@ export default function Home() {
                 <a className="report-link" href={`/api/scans/${encodeURIComponent(scan.id)}/markdown`}>
                   마크다운 보고서 / Markdown report
                 </a>
+                <a className="report-link" href={`/api/scans/${encodeURIComponent(scan.id)}/checklist`}>
+                  체크리스트 / Checklist
+                </a>
                 {installationId.trim() ? (
                   <button type="button" onClick={handleCreateIssue} disabled={isCreatingIssue}>
                     {isCreatingIssue ? "Creating issue..." : "Create GitHub issue"}
