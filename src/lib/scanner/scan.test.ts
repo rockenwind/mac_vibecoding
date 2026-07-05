@@ -44,4 +44,25 @@ describe("runScan", () => {
 
     expect("focus" in scan).toBe(false);
   });
+
+  it("excludes disabled rules from scan results and summary", () => {
+    const scan = runScan(
+      {
+        repository: {
+          owner: "example",
+          name: "repo",
+          url: "https://github.com/example/repo",
+          defaultBranch: "main"
+        },
+        files: sampleFiles,
+        warnings: []
+      },
+      { disabledRuleIds: ["secret.exposed-token", "secret.env-file"] }
+    );
+
+    expect(scan.findings.map((finding) => finding.ruleId)).not.toEqual(
+      expect.arrayContaining(["secret.exposed-token", "secret.env-file"])
+    );
+    expect(scan.summary.critical).toBe(0);
+  });
 });

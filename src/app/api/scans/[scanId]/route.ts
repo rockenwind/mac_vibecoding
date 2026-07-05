@@ -2,9 +2,16 @@ import type { ScanResult } from "@/lib/scanner/types";
 import {
   compareScanResults,
   deleteScan,
+  findScanById,
   readScanHistory
 } from "@/lib/scanHistory/store";
 import type { ScanHistoryEntry } from "@/lib/scanHistory/types";
+import {
+  baselineScanIdForRepository,
+  readScanSettings,
+  repositoryKey,
+  suppressedFingerprintsForRepository
+} from "@/lib/scanSettings/store";
 
 type RouteContext = {
   params: Promise<{
@@ -16,14 +23,24 @@ export async function GET(_request: Request, context: RouteContext): Promise<Res
   try {
     const { scanId } = await context.params;
     const history = await readScanHistory();
+    const settings = await readScanSettings();
     const selectedEntry = history.find((entry) => entry.scan.id === scanId);
 
     if (!selectedEntry) {
       return Response.json({ error: "Scan was not found." }, { status: 404 });
     }
 
-    const previousEntry = findPreviousSavedScan(selectedEntry, history);
-    const comparison = compareScanResults(selectedEntry.scan, previousEntry);
+    const key = repositoryKey(selectedEntry.scan.repository);
+    const baselineScanId = baselineScanIdForRepository(settings, key);
+    const baselineCandidate = findScanById(baselineScanId, history);
+    const baselineEntry =
+      baselineCandidate && repositoryKey(baselineCandidate.scan.repository) === key ? baselineCandidate : null;
+    const previousEntry = baselineEntry ?? findPreviousSavedScan(selectedEntry, history);
+    const comparison = compareScanResults(selectedEntry.scan, previousEntry, {
+      baselineScanId,
+      comparisonSource: baselineEntry ? "baseline" : previousEntry ? "previous" : "none",
+      suppressedFingerprints: suppressedFingerprintsForRepository(settings, key)
+    });
 
     return Response.json({
       scan: selectedEntry.scan,

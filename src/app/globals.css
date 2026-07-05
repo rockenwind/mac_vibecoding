@@ -302,6 +302,19 @@ h3 {
   background: #fff5f5;
 }
 
+.secondary-action {
+  align-self: flex-start;
+  background: #ffffff;
+  border-color: var(--line);
+  color: var(--text);
+  min-height: 36px;
+  padding: 0 12px;
+}
+
+.secondary-action:hover {
+  background: #f9fafb;
+}
+
 .history-button:disabled {
   cursor: wait;
   opacity: 0.72;
@@ -353,6 +366,30 @@ h3 {
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 18px;
+}
+
+.settings-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.rule-settings {
+  display: grid;
+  gap: 8px;
+}
+
+.rule-toggle {
+  align-items: center;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 4px 10px;
+  grid-template-columns: auto 1fr;
+  padding-top: 10px;
+}
+
+.rule-toggle small {
+  color: var(--muted);
+  grid-column: 2;
 }
 
 .findings-panel,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeFiles } from "./analyzers";
+import { analyzeFiles, listAnalyzerRules } from "./analyzers";
 import { sampleFiles } from "./__fixtures__/sampleFiles";
 
 describe("analyzeFiles", () => {
@@ -22,6 +22,25 @@ describe("analyzeFiles", () => {
 
     expect(findings).not.toHaveLength(0);
     expect(findings.every((finding) => finding.confidence)).toBe(true);
+  });
+
+  it("lists analyzer rules for UI settings", () => {
+    expect(listAnalyzerRules()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ ruleId: "secret.exposed-token", title: "Possible exposed credential" }),
+        expect.objectContaining({ ruleId: "nextjs.client-secret-exposure" })
+      ])
+    );
+  });
+
+  it("excludes disabled analyzer rules", () => {
+    const findings = analyzeFiles(sampleFiles, {
+      disabledRuleIds: ["secret.exposed-token", "secret.env-file"]
+    });
+
+    expect(findings.map((finding) => finding.ruleId)).not.toEqual(
+      expect.arrayContaining(["secret.exposed-token", "secret.env-file"])
+    );
   });
 
   it("detects repository scan review rules with expected confidence", () => {

@@ -7,6 +7,12 @@ const mocks = vi.hoisted(() => ({
   recordScan: vi.fn(),
   findPreviousScan: vi.fn(),
   compareScanResults: vi.fn(),
+  readScanSettings: vi.fn(),
+  disabledRuleIds: vi.fn(),
+  repositoryKey: vi.fn(),
+  baselineScanIdForRepository: vi.fn(),
+  suppressedFingerprintsForRepository: vi.fn(),
+  findScanById: vi.fn(),
   readGitHubAppConfig: vi.fn(),
   createGitHubAppJwt: vi.fn(),
   createInstallationAccessToken: vi.fn()
@@ -20,7 +26,16 @@ vi.mock("@/lib/scanHistory/store", () => ({
   readScanHistory: mocks.readScanHistory,
   recordScan: mocks.recordScan,
   findPreviousScan: mocks.findPreviousScan,
-  compareScanResults: mocks.compareScanResults
+  compareScanResults: mocks.compareScanResults,
+  findScanById: mocks.findScanById
+}));
+
+vi.mock("@/lib/scanSettings/store", () => ({
+  readScanSettings: mocks.readScanSettings,
+  disabledRuleIds: mocks.disabledRuleIds,
+  repositoryKey: mocks.repositoryKey,
+  baselineScanIdForRepository: mocks.baselineScanIdForRepository,
+  suppressedFingerprintsForRepository: mocks.suppressedFingerprintsForRepository
 }));
 
 vi.mock("@/lib/github/appConfig", () => ({
@@ -57,12 +72,21 @@ describe("POST /api/scans", () => {
     mocks.readScanHistory.mockResolvedValue([]);
     mocks.recordScan.mockImplementation(async (scan) => ({ savedAt: "2026-07-02T00:00:00.000Z", scan }));
     mocks.findPreviousScan.mockReturnValue(null);
+    mocks.findScanById.mockReturnValue(null);
     mocks.compareScanResults.mockImplementation((scan) => ({
       previousScanId: null,
+      baselineScanId: null,
+      comparisonSource: "none",
       newFindings: scan.findings,
       resolvedFindings: [],
-      unchangedFindings: []
+      unchangedFindings: [],
+      suppressedFindings: []
     }));
+    mocks.readScanSettings.mockResolvedValue({ baselines: [], suppressions: [], rules: [] });
+    mocks.disabledRuleIds.mockReturnValue([]);
+    mocks.repositoryKey.mockReturnValue("example/repo");
+    mocks.baselineScanIdForRepository.mockReturnValue(null);
+    mocks.suppressedFingerprintsForRepository.mockReturnValue([]);
     mocks.readGitHubAppConfig.mockReturnValue({
       configured: true,
       appId: "12345",
@@ -131,6 +155,34 @@ describe("POST /api/scans", () => {
         url: "https://github.com/example/repo"
       },
       { accessToken: "installation-token" }
+    );
+  });
+
+  it("applies rule settings and baseline comparison when scanning", async () => {
+    mocks.disabledRuleIds.mockReturnValue(["secret.exposed-token"]);
+    mocks.baselineScanIdForRepository.mockReturnValue("scan_baseline");
+    mocks.findScanById.mockReturnValue({
+      savedAt: "2026-07-01T00:00:00.000Z",
+      scan: { id: "scan_baseline", repository: { owner: "example", name: "repo", url: "", defaultBranch: "main" }, summary: { critical: 0, high: 0, medium: 0, low: 0, info: 0 }, warnings: [], findings: [] }
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/scans", {
+        method: "POST",
+        body: JSON.stringify({ repositoryUrl: "https://github.com/example/repo" })
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.disabledRuleIds).toHaveBeenCalled();
+    expect(mocks.compareScanResults).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ scan: expect.objectContaining({ id: "scan_baseline" }) }),
+      expect.objectContaining({
+        baselineScanId: "scan_baseline",
+        comparisonSource: "baseline",
+        suppressedFingerprints: []
+      })
     );
   });
 

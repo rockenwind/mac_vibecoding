@@ -7,6 +7,7 @@ import {
   createJsonScanHistoryStore,
   createSqliteScanHistoryStore,
   deleteScan,
+  findingFingerprint,
   readScanHistory,
   recordScan
 } from "./store";
@@ -175,5 +176,96 @@ describe("scan history store", () => {
     expect(comparison.unchangedFindings.map((finding) => finding.id)).toEqual([
       "secret.exposed-token:.env:1"
     ]);
+  });
+
+  it("uses a stable finding fingerprint when line numbers change", () => {
+    const previous = {
+      savedAt: "2026-07-01T00:00:00.000Z",
+      scan: {
+        ...baseScan,
+        id: "scan_previous",
+        findings: [
+          {
+            ...baseScan.findings[0],
+            id: "secret.exposed-token:.env:1",
+            lineStart: 1,
+            lineEnd: 1
+          }
+        ]
+      }
+    };
+    const current = {
+      ...baseScan,
+      id: "scan_current",
+      findings: [
+        {
+          ...baseScan.findings[0],
+          id: "secret.exposed-token:.env:8",
+          lineStart: 8,
+          lineEnd: 8
+        }
+      ]
+    };
+
+    const comparison = compareScanResults(current, previous);
+
+    expect(comparison.newFindings).toEqual([]);
+    expect(comparison.resolvedFindings).toEqual([]);
+    expect(comparison.unchangedFindings.map((finding) => finding.id)).toEqual(["secret.exposed-token:.env:8"]);
+  });
+
+  it("keeps duplicate fingerprints count-aware when comparing scans", () => {
+    const duplicateFinding = {
+      ...baseScan.findings[0],
+      id: "secret.exposed-token:.env:12",
+      lineStart: 12,
+      lineEnd: 12
+    };
+    const previous = {
+      savedAt: "2026-07-01T00:00:00.000Z",
+      scan: {
+        ...baseScan,
+        id: "scan_previous",
+        findings: [baseScan.findings[0]]
+      }
+    };
+    const current = {
+      ...baseScan,
+      id: "scan_current",
+      findings: [baseScan.findings[0], duplicateFinding]
+    };
+
+    const comparisonWithNewDuplicate = compareScanResults(current, previous);
+    const comparisonWithResolvedDuplicate = compareScanResults(previous.scan, {
+      savedAt: "2026-07-02T00:00:00.000Z",
+      scan: current
+    });
+
+    expect(comparisonWithNewDuplicate.newFindings.map((finding) => finding.id)).toEqual([
+      "secret.exposed-token:.env:12"
+    ]);
+    expect(comparisonWithNewDuplicate.unchangedFindings.map((finding) => finding.id)).toEqual([
+      "secret.exposed-token:.env:1"
+    ]);
+    expect(comparisonWithResolvedDuplicate.resolvedFindings.map((finding) => finding.id)).toEqual([
+      "secret.exposed-token:.env:12"
+    ]);
+  });
+
+  it("separates suppressed findings from new findings", () => {
+    const suppressedFingerprint = findingFingerprint(baseScan.findings[0]);
+    const comparison = compareScanResults(
+      {
+        ...baseScan,
+        id: "scan_current"
+      },
+      null,
+      {
+        suppressedFingerprints: [suppressedFingerprint]
+      }
+    );
+
+    expect(comparison.newFindings).toEqual([]);
+    expect(comparison.suppressedFindings.map((finding) => finding.id)).toEqual(["secret.exposed-token:.env:1"]);
   });
 });
