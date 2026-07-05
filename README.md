@@ -154,11 +154,12 @@ SCHEDULE_RUN_TOKEN=충분히-긴-무작위-문자열
 Render Cron Job은 다음 요청을 실행하도록 설정합니다.
 
 ```bash
-curl -X POST "$APP_URL/api/scans/schedules/run-due" \
-  -H "Authorization: Bearer $SCHEDULE_RUN_TOKEN"
+bash scripts/run-scheduled-scans-cron.sh
 ```
 
 권장 주기는 1시간입니다. 스캔 실행 여부는 각 저장소의 `nextRunAt`으로 다시 판단하므로, Cron이 자주 호출되어도 실행 시간이 지난 예약만 스캔합니다.
+
+자세한 Render Cron 설정 절차는 `docs/render-cron-scheduled-scans.md`를 참고합니다.
 
 ## 스캔 이력 저장
 
