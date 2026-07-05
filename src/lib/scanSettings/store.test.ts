@@ -8,6 +8,7 @@ import {
   readScanSettings,
   repositoryKey,
   setBaselineScan,
+  upsertScanSchedule,
   setRuleEnabled,
   suppressFinding,
   unsuppressFinding
@@ -31,7 +32,8 @@ describe("scan settings store", () => {
     await expect(readScanSettings()).resolves.toEqual({
       baselines: [],
       suppressions: [],
-      rules: []
+      rules: [],
+      schedules: []
     });
   });
 
@@ -55,7 +57,41 @@ describe("scan settings store", () => {
           createdAt: "2026-07-05T00:01:00.000Z"
         }
       ],
-      rules: [{ ruleId: "secret.exposed-token", enabled: false, updatedAt: "2026-07-05T00:02:00.000Z" }]
+      rules: [{ ruleId: "secret.exposed-token", enabled: false, updatedAt: "2026-07-05T00:02:00.000Z" }],
+      schedules: []
+    });
+  });
+
+  it("stores scheduled scans in the default JSON store", async () => {
+    await upsertScanSchedule(
+      {
+        repositoryKey: "example/repo",
+        repositoryUrl: "https://github.com/example/repo",
+        installationId: 123,
+        enabled: true,
+        intervalDays: 7,
+        nextRunAt: "2026-07-06T00:00:00.000Z",
+        notifyOnNewFindings: true,
+        notifyOnResolvedFindings: true
+      },
+      new Date("2026-07-05T00:00:00Z")
+    );
+
+    await expect(readScanSettings()).resolves.toMatchObject({
+      schedules: [
+        {
+          repositoryKey: "example/repo",
+          repositoryUrl: "https://github.com/example/repo",
+          installationId: 123,
+          enabled: true,
+          intervalDays: 7,
+          nextRunAt: "2026-07-06T00:00:00.000Z",
+          notifyOnNewFindings: true,
+          notifyOnResolvedFindings: true,
+          createdAt: "2026-07-05T00:00:00.000Z",
+          updatedAt: "2026-07-05T00:00:00.000Z"
+        }
+      ]
     });
   });
 
@@ -94,7 +130,8 @@ describe("scan settings store", () => {
           enabled: false,
           updatedAt: "2026-07-05T00:02:00.000Z"
         }
-      ]
+      ],
+      schedules: []
     });
   });
 });

@@ -84,6 +84,50 @@ type ScanSettingsResponse = {
   error?: string;
 };
 
+type ScanSchedule = {
+  repositoryKey: string;
+  repositoryUrl: string;
+  installationId?: number;
+  enabled: boolean;
+  intervalDays: number;
+  nextRunAt: string;
+  lastRunAt?: string;
+  lastScanId?: string;
+  notifyOnNewFindings: boolean;
+  notifyOnResolvedFindings: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type ScanSchedulesResponse = {
+  schedules?: ScanSchedule[];
+  error?: string;
+};
+
+type ScheduleRunResult = {
+  repositoryKey: string;
+  status: "success" | "failed";
+  scanId?: string;
+  savedAt?: string;
+  nextRunAt?: string;
+  error?: string;
+  action?: string;
+  notifications?: Array<{
+    repositoryKey: string;
+    scanId: string;
+    newFindings: number;
+    resolvedFindings: number;
+    highestSeverity: Severity | null;
+    message: string;
+  }>;
+};
+
+type ScheduleRunResponse = {
+  ranAt?: string;
+  results?: ScheduleRunResult[];
+  error?: string;
+};
+
 type GitHubInstallation = {
   id: number;
   account: string;
@@ -195,6 +239,13 @@ export default function Home() {
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [scanProgress, setScanProgress] = useState<string | null>(null);
   const [isUpdatingSettings, setIsUpdatingSettings] = useState(false);
+  const [scheduledScans, setScheduledScans] = useState<ScanSchedule[]>([]);
+  const [scheduleIntervalDays, setScheduleIntervalDays] = useState("7");
+  const [scheduleStatus, setScheduleStatus] = useState<string | null>(null);
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
+  const [scheduleRunResults, setScheduleRunResults] = useState<ScheduleRunResult[]>([]);
+  const [isUpdatingSchedule, setIsUpdatingSchedule] = useState(false);
+  const [isRunningSchedules, setIsRunningSchedules] = useState(false);
 
   const suppressedFingerprints = useMemo(
     () => new Set((comparison?.suppressedFindings ?? []).map((finding) => findingFingerprint(finding))),
@@ -278,9 +329,29 @@ export default function Home() {
       }
     }
 
+    async function loadSchedules() {
+      try {
+        const response = await fetch("/api/scans/schedules");
+        const data = (await response.json()) as ScanSchedulesResponse;
+        if (!response.ok) {
+          throw new Error(data.error ?? "Could not load scheduled scans.");
+        }
+        if (isMounted) {
+          setScheduledScans(data.schedules ?? []);
+          setScheduleError(null);
+        }
+      } catch (loadError) {
+        if (isMounted) {
+          const message = loadError instanceof Error ? loadError.message : "Could not load scheduled scans.";
+          setScheduleError(message);
+        }
+      }
+    }
+
     void loadHistory();
     void loadInstallations();
     void loadSettings();
+    void loadSchedules();
 
     return () => {
       isMounted = false;
@@ -430,6 +501,93 @@ export default function Home() {
 
     setScan(data.scan);
     setComparison(data.comparison ?? null);
+  }
+
+  async function handleSaveSchedule() {
+    setScheduleError(null);
+    setScheduleStatus(null);
+    setIsUpdatingSchedule(true);
+
+    try {
+      const intervalDays = Number(scheduleIntervalDays);
+      const nextRunAt = new Date();
+      nextRunAt.setUTCDate(nextRunAt.getUTCDate() + intervalDays);
+      const response = await fetch("/api/scans/schedules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          repositoryUrl,
+          ...(installationId.trim() ? { installationId: Number(installationId) } : {}),
+          enabled: true,
+          intervalDays,
+          nextRunAt: nextRunAt.toISOString(),
+          notifyOnNewFindings: true,
+          notifyOnResolvedFindings: true
+        })
+      });
+      const data = (await response.json()) as ScanSchedulesResponse;
+      if (!response.ok || !data.schedules) {
+        throw new Error(data.error ?? "Scheduled scan could not be saved.");
+      }
+      setScheduledScans(data.schedules);
+      setScheduleStatus("예약이 저장되었습니다. / Schedule saved.");
+    } catch (scheduleSaveError) {
+      const message =
+        scheduleSaveError instanceof Error ? scheduleSaveError.message : "Scheduled scan could not be saved.";
+      setScheduleError(message);
+    } finally {
+      setIsUpdatingSchedule(false);
+    }
+  }
+
+  async function handleDeleteSchedule(repositoryKey: string) {
+    setScheduleError(null);
+    setScheduleStatus(null);
+    setIsUpdatingSchedule(true);
+
+    try {
+      const response = await fetch(`/api/scans/schedules?repositoryKey=${encodeURIComponent(repositoryKey)}`, {
+        method: "DELETE"
+      });
+      const data = (await response.json()) as ScanSchedulesResponse;
+      if (!response.ok || !data.schedules) {
+        throw new Error(data.error ?? "Scheduled scan could not be deleted.");
+      }
+      setScheduledScans(data.schedules);
+      setScheduleStatus("예약이 해제되었습니다. / Schedule removed.");
+    } catch (scheduleDeleteError) {
+      const message =
+        scheduleDeleteError instanceof Error ? scheduleDeleteError.message : "Scheduled scan could not be deleted.";
+      setScheduleError(message);
+    } finally {
+      setIsUpdatingSchedule(false);
+    }
+  }
+
+  async function handleRunDueSchedules() {
+    setScheduleError(null);
+    setScheduleStatus(null);
+    setIsRunningSchedules(true);
+
+    try {
+      const response = await fetch("/api/scans/schedules/run-due", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({})
+      });
+      const data = (await response.json()) as ScheduleRunResponse;
+      if (!response.ok) {
+        throw new Error(data.error ?? "Scheduled scans could not run.");
+      }
+      setScheduleRunResults(data.results ?? []);
+      setScheduleStatus(`예약 실행 완료 / Scheduled run complete: ${data.results?.length ?? 0}`);
+    } catch (scheduleRunError) {
+      const message =
+        scheduleRunError instanceof Error ? scheduleRunError.message : "Scheduled scans could not run.";
+      setScheduleError(message);
+    } finally {
+      setIsRunningSchedules(false);
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -703,6 +861,85 @@ export default function Home() {
               );
             })}
           </div>
+        </section>
+
+        <section className="panel schedule-panel" aria-labelledby="schedule-title">
+          <div className="panel-heading">
+            <h2 id="schedule-title">예약 스캔 / Scheduled scan</h2>
+            <span className="scan-id">{scheduledScans.length} active / 활성</span>
+          </div>
+          <div className="schedule-controls">
+            <label htmlFor="schedule-interval">실행 주기 / Interval</label>
+            <select
+              id="schedule-interval"
+              value={scheduleIntervalDays}
+              onChange={(event) => setScheduleIntervalDays(event.target.value)}
+            >
+              <option value="1">매일 / Daily</option>
+              <option value="3">3일마다 / Every 3 days</option>
+              <option value="7">7일마다 / Weekly</option>
+              <option value="14">14일마다 / Every 14 days</option>
+            </select>
+            <div className="schedule-actions">
+              <button
+                disabled={isUpdatingSchedule || !repositoryUrl.trim()}
+                onClick={() => void handleSaveSchedule()}
+                type="button"
+              >
+                예약 저장 / Save schedule
+              </button>
+              <button
+                disabled={isRunningSchedules}
+                onClick={() => void handleRunDueSchedules()}
+                type="button"
+              >
+                지금 실행 / Run due scans
+              </button>
+            </div>
+          </div>
+          {scheduleStatus ? <p className="picker-status">{scheduleStatus}</p> : null}
+          {scheduleError ? <p className="history-error" role="alert">{scheduleError}</p> : null}
+          {scheduledScans.length ? (
+            <ul className="schedule-list">
+              {scheduledScans.map((schedule) => (
+                <li key={schedule.repositoryKey}>
+                  <div>
+                    <strong>{schedule.repositoryKey}</strong>
+                    <span>다음 실행 / Next: {new Date(schedule.nextRunAt).toLocaleString()}</span>
+                    {schedule.lastScanId ? <span>마지막 스캔 / Last scan: {schedule.lastScanId}</span> : null}
+                  </div>
+                  <button
+                    className="history-delete-button"
+                    disabled={isUpdatingSchedule}
+                    onClick={() => void handleDeleteSchedule(schedule.repositoryKey)}
+                    type="button"
+                  >
+                    예약 해제 / Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="empty-state">등록된 예약 스캔이 없습니다. / No scheduled scans.</p>
+          )}
+          {scheduleRunResults.length ? (
+            <div className="schedule-results">
+              <h3>최근 예약 실행 / Latest scheduled run</h3>
+              <ul>
+                {scheduleRunResults.map((result) => (
+                  <li key={`${result.repositoryKey}-${result.scanId ?? result.error}`}>
+                    <strong>{result.repositoryKey}</strong>
+                    <span>{result.status === "success" ? "성공 / Success" : "실패 / Failed"}</span>
+                    {result.scanId ? <span>{result.scanId}</span> : null}
+                    {result.error ? <span>{result.error}</span> : null}
+                    {result.notifications?.map((notification) => (
+                      <span key={`${notification.scanId}-${notification.message}`}>{notification.message}</span>
+                    ))}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </section>
 
         {scanProgress ? (

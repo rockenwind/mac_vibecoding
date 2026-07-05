@@ -84,6 +84,59 @@ describe("Home", () => {
             })
           };
         }
+        if (url === "/api/scans/schedules") {
+          if (init?.method === "POST") {
+            return {
+              ok: true,
+              json: async () => ({
+                schedules: [
+                  {
+                    repositoryKey: "example/repo",
+                    repositoryUrl: "https://github.com/example/repo",
+                    enabled: true,
+                    intervalDays: 7,
+                    nextRunAt: "2026-07-06T00:00:00.000Z",
+                    notifyOnNewFindings: true,
+                    notifyOnResolvedFindings: true,
+                    createdAt: "2026-07-05T00:00:00.000Z",
+                    updatedAt: "2026-07-05T00:00:00.000Z"
+                  }
+                ]
+              })
+            };
+          }
+          if (init?.method === "DELETE") {
+            return { ok: true, json: async () => ({ schedules: [] }) };
+          }
+          return { ok: true, json: async () => ({ schedules: [] }) };
+        }
+        if (url === "/api/scans/schedules/run-due") {
+          return {
+            ok: true,
+            json: async () => ({
+              ranAt: "2026-07-05T00:00:00.000Z",
+              results: [
+                {
+                  repositoryKey: "example/repo",
+                  status: "success",
+                  scanId: "scan_scheduled",
+                  savedAt: "2026-07-05T00:00:00.000Z",
+                  nextRunAt: "2026-07-12T00:00:00.000Z",
+                  notifications: [
+                    {
+                      repositoryKey: "example/repo",
+                      scanId: "scan_scheduled",
+                      newFindings: 1,
+                      resolvedFindings: 0,
+                      highestSeverity: "critical",
+                      message: "새 취약점 1개가 발견되었습니다. / 1 new finding was detected."
+                    }
+                  ]
+                }
+              ]
+            })
+          };
+        }
         if (url === "/api/scans/scan_test") {
           return {
             ok: true,
@@ -405,6 +458,32 @@ describe("Home", () => {
         })
       );
     });
+  });
+
+  it("renders scheduled scans and can save and run a schedule", async () => {
+    const fetchMock = vi.mocked(fetch);
+    render(<Home />);
+
+    expect(await screen.findByRole("heading", { name: "예약 스캔 / Scheduled scan" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("GitHub repository URL"), {
+      target: { value: "https://github.com/example/repo" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "예약 저장 / Save schedule" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/scans/schedules",
+        expect.objectContaining({
+          method: "POST",
+          body: expect.stringContaining("https://github.com/example/repo")
+        })
+      );
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "지금 실행 / Run due scans" }));
+
+    expect(await screen.findByText("scan_scheduled")).toBeInTheDocument();
+    expect(screen.getByText("새 취약점 1개가 발견되었습니다. / 1 new finding was detected.")).toBeInTheDocument();
   });
 
   it("shows scan progress while scanning", async () => {

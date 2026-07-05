@@ -7,6 +7,7 @@ import type {
   RepositoryKey,
   RuleSetting,
   ScanBaselineSetting,
+  ScanScheduleSetting,
   ScanSettings,
   ScanSettingsStore
 } from "./types";
@@ -16,7 +17,8 @@ const defaultSettingsFile = join(process.cwd(), ".data", "scan-settings.json");
 const emptySettings: ScanSettings = {
   baselines: [],
   suppressions: [],
-  rules: []
+  rules: [],
+  schedules: []
 };
 
 export async function readScanSettings(): Promise<ScanSettings> {
@@ -44,6 +46,28 @@ export async function unsuppressFinding(repositoryKey: RepositoryKey, fingerprin
 
 export async function setRuleEnabled(ruleId: string, enabled: boolean, now = new Date()): Promise<ScanSettings> {
   return createDefaultScanSettingsStore().setRuleEnabled(ruleId, enabled, now);
+}
+
+export async function upsertScanSchedule(
+  input: Omit<ScanScheduleSetting, "createdAt" | "updatedAt" | "lastRunAt" | "lastScanId"> & {
+    lastRunAt?: string;
+    lastScanId?: string;
+  },
+  now = new Date()
+): Promise<ScanSettings> {
+  return createDefaultScanSettingsStore().upsertSchedule(input, now);
+}
+
+export async function deleteScanSchedule(repositoryKey: RepositoryKey): Promise<ScanSettings> {
+  return createDefaultScanSettingsStore().deleteSchedule(repositoryKey);
+}
+
+export async function markScanScheduleRun(
+  repositoryKey: RepositoryKey,
+  input: { lastRunAt: string; lastScanId: string; nextRunAt: string },
+  now = new Date()
+): Promise<ScanSettings> {
+  return createDefaultScanSettingsStore().markScheduleRun(repositoryKey, input, now);
 }
 
 export function repositoryKey(repository: Pick<RepositoryRef, "owner" | "name">): RepositoryKey {
@@ -139,6 +163,37 @@ export function createJsonScanSettingsStore(settingsFile: string): ScanSettingsS
         ...settings,
         rules: upsertRule(settings.rules, ruleId, enabled, now)
       });
+    },
+    async upsertSchedule(input, now = new Date()) {
+      const settings = await read();
+      return write({
+        ...settings,
+        schedules: upsertSchedule(settings.schedules, input, now)
+      });
+    },
+    async deleteSchedule(key) {
+      const settings = await read();
+      return write({
+        ...settings,
+        schedules: settings.schedules.filter((schedule) => schedule.repositoryKey !== key)
+      });
+    },
+    async markScheduleRun(key, input, now = new Date()) {
+      const settings = await read();
+      return write({
+        ...settings,
+        schedules: settings.schedules.map((schedule) =>
+          schedule.repositoryKey === key
+            ? {
+                ...schedule,
+                lastRunAt: input.lastRunAt,
+                lastScanId: input.lastScanId,
+                nextRunAt: input.nextRunAt,
+                updatedAt: now.toISOString()
+              }
+            : schedule
+        )
+      });
     }
   };
 }
@@ -158,6 +213,28 @@ export function createSqliteScanSettingsStore(databaseFile: string): ScanSetting
         const rules = database
           .prepare("SELECT rule_id, enabled, updated_at FROM scan_rule_settings ORDER BY rule_id")
           .all() as Array<{ rule_id: string; enabled: number; updated_at: string }>;
+        const schedules = database
+          .prepare(
+            `SELECT repository_key, repository_url, installation_id, enabled, interval_days, next_run_at,
+                    last_run_at, last_scan_id, notify_on_new_findings, notify_on_resolved_findings,
+                    created_at, updated_at
+             FROM scan_schedules
+             ORDER BY repository_key`
+          )
+          .all() as Array<{
+            repository_key: string;
+            repository_url: string;
+            installation_id: number | null;
+            enabled: number;
+            interval_days: number;
+            next_run_at: string;
+            last_run_at: string | null;
+            last_scan_id: string | null;
+            notify_on_new_findings: number;
+            notify_on_resolved_findings: number;
+            created_at: string;
+            updated_at: string;
+          }>;
 
         return {
           baselines: baselines.map((row) => ({
@@ -174,6 +251,20 @@ export function createSqliteScanSettingsStore(databaseFile: string): ScanSetting
           rules: rules.map((row) => ({
             ruleId: row.rule_id,
             enabled: Boolean(row.enabled),
+            updatedAt: row.updated_at
+          })),
+          schedules: schedules.map((row) => ({
+            repositoryKey: row.repository_key,
+            repositoryUrl: row.repository_url,
+            ...(row.installation_id ? { installationId: row.installation_id } : {}),
+            enabled: Boolean(row.enabled),
+            intervalDays: row.interval_days,
+            nextRunAt: row.next_run_at,
+            ...(row.last_run_at ? { lastRunAt: row.last_run_at } : {}),
+            ...(row.last_scan_id ? { lastScanId: row.last_scan_id } : {}),
+            notifyOnNewFindings: Boolean(row.notify_on_new_findings),
+            notifyOnResolvedFindings: Boolean(row.notify_on_resolved_findings),
+            createdAt: row.created_at,
             updatedAt: row.updated_at
           }))
         };
@@ -248,6 +339,76 @@ export function createSqliteScanSettingsStore(databaseFile: string): ScanSetting
         database.close();
       }
       return this.read();
+    },
+    async upsertSchedule(input, now = new Date()) {
+      await mkdir(dirname(databaseFile), { recursive: true });
+      const database = await openScanSettingsDatabase(databaseFile);
+      const timestamp = now.toISOString();
+      try {
+        database
+          .prepare(
+            `INSERT INTO scan_schedules (
+               repository_key, repository_url, installation_id, enabled, interval_days, next_run_at,
+               last_run_at, last_scan_id, notify_on_new_findings, notify_on_resolved_findings,
+               created_at, updated_at
+             )
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(repository_key) DO UPDATE SET
+               repository_url = excluded.repository_url,
+               installation_id = excluded.installation_id,
+               enabled = excluded.enabled,
+               interval_days = excluded.interval_days,
+               next_run_at = excluded.next_run_at,
+               last_run_at = excluded.last_run_at,
+               last_scan_id = excluded.last_scan_id,
+               notify_on_new_findings = excluded.notify_on_new_findings,
+               notify_on_resolved_findings = excluded.notify_on_resolved_findings,
+               updated_at = excluded.updated_at`
+          )
+          .run(
+            input.repositoryKey,
+            input.repositoryUrl,
+            input.installationId ?? null,
+            input.enabled ? 1 : 0,
+            input.intervalDays,
+            input.nextRunAt,
+            input.lastRunAt ?? null,
+            input.lastScanId ?? null,
+            input.notifyOnNewFindings ? 1 : 0,
+            input.notifyOnResolvedFindings ? 1 : 0,
+            timestamp,
+            timestamp
+          );
+      } finally {
+        database.close();
+      }
+      return this.read();
+    },
+    async deleteSchedule(key) {
+      await mkdir(dirname(databaseFile), { recursive: true });
+      const database = await openScanSettingsDatabase(databaseFile);
+      try {
+        database.prepare("DELETE FROM scan_schedules WHERE repository_key = ?").run(key);
+      } finally {
+        database.close();
+      }
+      return this.read();
+    },
+    async markScheduleRun(key, input, now = new Date()) {
+      await mkdir(dirname(databaseFile), { recursive: true });
+      const database = await openScanSettingsDatabase(databaseFile);
+      try {
+        database
+          .prepare(
+            `UPDATE scan_schedules
+             SET last_run_at = ?, last_scan_id = ?, next_run_at = ?, updated_at = ?
+             WHERE repository_key = ?`
+          )
+          .run(input.lastRunAt, input.lastScanId, input.nextRunAt, now.toISOString(), key);
+      } finally {
+        database.close();
+      }
+      return this.read();
     }
   };
 }
@@ -289,11 +450,35 @@ function upsertRule(rules: RuleSetting[], ruleId: string, enabled: boolean, now:
   ].sort((left, right) => left.ruleId.localeCompare(right.ruleId));
 }
 
+function upsertSchedule(
+  schedules: ScanScheduleSetting[],
+  input: Omit<ScanScheduleSetting, "createdAt" | "updatedAt" | "lastRunAt" | "lastScanId"> & {
+    lastRunAt?: string;
+    lastScanId?: string;
+  },
+  now: Date
+): ScanScheduleSetting[] {
+  const existing = schedules.find((schedule) => schedule.repositoryKey === input.repositoryKey);
+  const timestamp = now.toISOString();
+  return [
+    {
+      ...input,
+      ...(input.installationId ? { installationId: input.installationId } : {}),
+      ...(input.lastRunAt ? { lastRunAt: input.lastRunAt } : {}),
+      ...(input.lastScanId ? { lastScanId: input.lastScanId } : {}),
+      createdAt: existing?.createdAt ?? timestamp,
+      updatedAt: timestamp
+    },
+    ...schedules.filter((schedule) => schedule.repositoryKey !== input.repositoryKey)
+  ].sort((left, right) => left.repositoryKey.localeCompare(right.repositoryKey));
+}
+
 function normalizeSettings(settings: Partial<ScanSettings>): ScanSettings {
   return {
     baselines: Array.isArray(settings.baselines) ? settings.baselines : [],
     suppressions: Array.isArray(settings.suppressions) ? settings.suppressions : [],
-    rules: Array.isArray(settings.rules) ? settings.rules : []
+    rules: Array.isArray(settings.rules) ? settings.rules : [],
+    schedules: Array.isArray(settings.schedules) ? settings.schedules : []
   };
 }
 
@@ -301,7 +486,8 @@ function empty(): ScanSettings {
   return {
     baselines: [],
     suppressions: [],
-    rules: []
+    rules: [],
+    schedules: []
   };
 }
 
@@ -340,6 +526,20 @@ async function openScanSettingsDatabase(databaseFile: string): Promise<DatabaseS
     CREATE TABLE IF NOT EXISTS scan_rule_settings (
       rule_id TEXT PRIMARY KEY,
       enabled INTEGER NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS scan_schedules (
+      repository_key TEXT PRIMARY KEY,
+      repository_url TEXT NOT NULL,
+      installation_id INTEGER,
+      enabled INTEGER NOT NULL,
+      interval_days INTEGER NOT NULL,
+      next_run_at TEXT NOT NULL,
+      last_run_at TEXT,
+      last_scan_id TEXT,
+      notify_on_new_findings INTEGER NOT NULL,
+      notify_on_resolved_findings INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
   `);

@@ -94,6 +94,10 @@ sequenceDiagram
 | `POST /api/scans/{scanId}/github-issue` | 스캔 결과 GitHub Issue 생성 |
 | `GET /api/scans/settings` | 기준선, 오탐, 규칙 설정 조회 |
 | `PATCH /api/scans/settings` | 기준선 지정, 오탐 처리, 규칙 사용 여부 변경 |
+| `GET /api/scans/schedules` | 예약 스캔 설정 조회 |
+| `POST /api/scans/schedules` | 저장소별 예약 스캔 생성 또는 갱신 |
+| `DELETE /api/scans/schedules?repositoryKey=owner/name` | 저장소 예약 스캔 삭제 |
+| `POST /api/scans/schedules/run-due` | 실행 시간이 지난 예약 스캔 실행 |
 
 ## 데이터 흐름과 저장 항목
 
@@ -107,6 +111,9 @@ flowchart TD
   SettingsJson --> BaselineCompare["기준선 비교"]
   SettingsJson --> Suppression["오탐 제외"]
   SettingsJson --> RuleToggle["규칙 사용 여부"]
+  SettingsJson --> Schedules["예약 스캔 설정"]
+  Schedules --> ScheduledRun["예약 실행 API"]
+  ScheduledRun --> HistoryJson
 ```
 
 ## 화면에서 할 수 있는 일
@@ -122,6 +129,21 @@ flowchart TD
 9. 기준선 지정, 오탐 처리, 규칙 사용 여부를 조정합니다.
 10. 필요하면 JSON 보고서를 열거나 Markdown 보고서와 보안 체크리스트를 내려받아 상세 결과를 확인합니다.
 11. GitHub App installation ID가 있으면 GitHub Issue를 생성합니다.
+12. 예약 스캔을 저장하고 실행 시간이 지난 예약을 수동으로 실행해 새 취약점과 해결된 취약점 알림 후보를 확인합니다.
+
+## 예약 스캔과 변경 알림
+
+예약 스캔은 Repository scan 서비스 안에서 저장소별 점검 주기를 관리합니다. 현재 단계에서는 화면과 API에서 예약을 저장하고, `run-due` API를 호출해 실행 시간이 지난 저장소를 점검합니다.
+
+예약 실행 결과는 기존 스캔 이력에 저장되며, 기준선 또는 이전 스캔과 비교해 다음 내용을 보여줍니다.
+
+- 새 취약점
+- 해결된 취약점
+- 유지 중인 취약점
+- 오탐 처리된 항목
+- 알림 후보 메시지
+
+외부 자동 호출은 후속 단계에서 맥 자동 실행, Render Cron, GitHub Actions, 또는 별도 작업 서버로 연결할 수 있습니다.
 
 ## 스캔 이력 저장
 
