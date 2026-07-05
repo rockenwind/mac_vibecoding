@@ -608,6 +608,19 @@ describe("Home", () => {
     expect(link).toHaveAttribute("href", "/api/scans/scan_test/markdown");
   });
 
+  it("shows a security checklist download link after a repository scan", async () => {
+    render(<Home />);
+
+    fireEvent.change(screen.getByLabelText("GitHub repository URL"), {
+      target: { value: "https://github.com/example/repo" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Scan repository" }));
+
+    const link = await screen.findByRole("link", { name: "체크리스트 / Checklist" });
+
+    expect(link).toHaveAttribute("href", "/api/scans/scan_test/checklist");
+  });
+
   it("submits only repository scan input", async () => {
     const fetchMock = vi.mocked(fetch);
     render(<Home />);
