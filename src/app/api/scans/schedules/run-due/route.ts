@@ -4,6 +4,11 @@ import { readScanSettings, markScanScheduleRun } from "@/lib/scanSettings/store"
 import { runRepositoryScan, scanErrorResponse } from "@/lib/scans/runRepositoryScan";
 
 export async function POST(request: Request): Promise<Response> {
+  const authError = authorizeScheduledRun(request);
+  if (authError) {
+    return authError;
+  }
+
   const body = await readOptionalJson(request);
   const now = readNow(body.now);
 
@@ -54,6 +59,21 @@ export async function POST(request: Request): Promise<Response> {
     const message = error instanceof Error ? error.message : "Scheduled scans could not run.";
     return Response.json({ error: message }, { status: 500 });
   }
+}
+
+function authorizeScheduledRun(request: Request): Response | null {
+  const configuredToken = process.env.SCHEDULE_RUN_TOKEN?.trim();
+  if (!configuredToken) {
+    return null;
+  }
+
+  const header = request.headers.get("Authorization") ?? "";
+  const expected = `Bearer ${configuredToken}`;
+  if (header !== expected) {
+    return Response.json({ error: "Scheduled scan token is required." }, { status: 401 });
+  }
+
+  return null;
 }
 
 async function readOptionalJson(request: Request): Promise<Record<string, unknown>> {
