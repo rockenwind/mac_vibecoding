@@ -19,10 +19,26 @@ export type RuleSetting = {
   updatedAt: string;
 };
 
+export type ScanScheduleSetting = {
+  repositoryKey: RepositoryKey;
+  repositoryUrl: string;
+  installationId?: number;
+  enabled: boolean;
+  intervalDays: number;
+  nextRunAt: string;
+  lastRunAt?: string;
+  lastScanId?: string;
+  notifyOnNewFindings: boolean;
+  notifyOnResolvedFindings: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type ScanSettings = {
   baselines: ScanBaselineSetting[];
   suppressions: FindingSuppression[];
   rules: RuleSetting[];
+  schedules: ScanScheduleSetting[];
 };
 
 export type ScanSettingsStore = {
@@ -37,4 +53,17 @@ export type ScanSettingsStore = {
   }): Promise<ScanSettings>;
   unsuppressFinding(repositoryKey: RepositoryKey, fingerprint: string): Promise<ScanSettings>;
   setRuleEnabled(ruleId: string, enabled: boolean, now?: Date): Promise<ScanSettings>;
+  upsertSchedule(
+    input: Omit<ScanScheduleSetting, "createdAt" | "updatedAt" | "lastRunAt" | "lastScanId"> & {
+      lastRunAt?: string;
+      lastScanId?: string;
+    },
+    now?: Date
+  ): Promise<ScanSettings>;
+  deleteSchedule(repositoryKey: RepositoryKey): Promise<ScanSettings>;
+  markScheduleRun(
+    repositoryKey: RepositoryKey,
+    input: { lastRunAt: string; lastScanId: string; nextRunAt: string },
+    now?: Date
+  ): Promise<ScanSettings>;
 };
