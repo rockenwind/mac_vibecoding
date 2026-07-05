@@ -15,11 +15,11 @@ export function runScan(input: {
   repository: Required<RepositoryRef>;
   files: RepositoryFile[];
   warnings: ScanWarning[];
-}): ScanResult {
+}, options: { disabledRuleIds?: string[] } = {}): ScanResult {
   const selectedFiles = input.files.filter((file) =>
     shouldScanFile({ path: file.path, size: file.size })
   );
-  const findings = analyzeFiles(selectedFiles);
+  const findings = analyzeFiles(selectedFiles, { disabledRuleIds: options.disabledRuleIds });
   const summary = createEmptySummary();
 
   for (const finding of findings) {

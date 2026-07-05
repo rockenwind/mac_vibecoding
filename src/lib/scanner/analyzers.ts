@@ -13,6 +13,13 @@ type RuleMatch = {
   fixSuggestion: string;
 };
 
+export type AnalyzerRuleMetadata = {
+  ruleId: string;
+  title: string;
+  severity: Severity;
+  category: FindingCategory;
+};
+
 const rules: RuleMatch[] = [
   {
     ruleId: "secret.exposed-token",
@@ -85,11 +92,60 @@ const authorizationReviewPattern =
 const clientSecretPattern =
   /\bprocess\.env\.(?!NEXT_PUBLIC_)[A-Z0-9_]*(?:API_KEY|SECRET|TOKEN|PASSWORD|PRIVATE_KEY)[A-Z0-9_]*/;
 
-export function analyzeFiles(files: RepositoryFile[]): Finding[] {
+const specialRules: AnalyzerRuleMetadata[] = [
+  {
+    ruleId: "secret.env-file",
+    title: "Environment file committed to repository",
+    severity: "high",
+    category: "secret"
+  },
+  {
+    ruleId: "mcp.broad-filesystem-shell",
+    title: "MCP configuration combines shell access and broad filesystem access",
+    severity: "high",
+    category: "mcp"
+  },
+  {
+    ruleId: "api.missing-auth-review",
+    title: "API mutation route needs authentication review",
+    severity: "medium",
+    category: "agent-tooling"
+  },
+  {
+    ruleId: "admin.missing-authorization-review",
+    title: "Admin route needs authorization review",
+    severity: "high",
+    category: "agent-tooling"
+  },
+  {
+    ruleId: "nextjs.client-secret-exposure",
+    title: "Client component references server secret",
+    severity: "high",
+    category: "secret"
+  }
+];
+
+export function listAnalyzerRules(): AnalyzerRuleMetadata[] {
+  return [
+    ...rules.map((rule) => ({
+      ruleId: rule.ruleId,
+      title: rule.title,
+      severity: rule.severity,
+      category: rule.category
+    })),
+    ...specialRules
+  ].sort((left, right) => left.ruleId.localeCompare(right.ruleId));
+}
+
+export function analyzeFiles(
+  files: RepositoryFile[],
+  options: { disabledRuleIds?: string[] } = {}
+): Finding[] {
   const findings: Finding[] = [];
+  const disabled = new Set(options.disabledRuleIds ?? []);
 
   for (const file of files) {
-    if (isEnvironmentFile(file.path)) {
+    if (!disabled.has("secret.env-file") && isEnvironmentFile(file.path)) {
       findings.push(
         createFinding({
           file,
@@ -106,7 +162,7 @@ export function analyzeFiles(files: RepositoryFile[]): Finding[] {
       );
     }
 
-    if (hasBroadFilesystemShellMcpRisk(file.content)) {
+    if (!disabled.has("mcp.broad-filesystem-shell") && hasBroadFilesystemShellMcpRisk(file.content)) {
       findings.push(
         createFinding({
           file,
@@ -128,6 +184,9 @@ export function analyzeFiles(files: RepositoryFile[]): Finding[] {
     const lines = file.content.split(/\r?\n/);
     lines.forEach((line, index) => {
       for (const rule of rules) {
+        if (disabled.has(rule.ruleId)) {
+          continue;
+        }
         if (matchesRule(rule, file, line)) {
           findings.push(
             createFinding({
@@ -147,7 +206,7 @@ export function analyzeFiles(files: RepositoryFile[]): Finding[] {
       }
     });
 
-    if (isApiRouteMissingAuthReview(file)) {
+    if (!disabled.has("api.missing-auth-review") && isApiRouteMissingAuthReview(file)) {
       findings.push(
         createFinding({
           file,
@@ -164,7 +223,7 @@ export function analyzeFiles(files: RepositoryFile[]): Finding[] {
       );
     }
 
-    if (isAdminRouteMissingAuthorizationReview(file)) {
+    if (!disabled.has("admin.missing-authorization-review") && isAdminRouteMissingAuthorizationReview(file)) {
       findings.push(
         createFinding({
           file,
@@ -181,7 +240,7 @@ export function analyzeFiles(files: RepositoryFile[]): Finding[] {
       );
     }
 
-    if (hasClientSecretExposure(file)) {
+    if (!disabled.has("nextjs.client-secret-exposure") && hasClientSecretExposure(file)) {
       findings.push(
         createFinding({
           file,

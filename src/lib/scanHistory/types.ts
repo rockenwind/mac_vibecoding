@@ -13,9 +13,12 @@ export type ScanHistoryStore = {
 
 export type ScanComparison = {
   previousScanId: string | null;
+  baselineScanId?: string | null;
+  comparisonSource?: "previous" | "baseline" | "none";
   newFindings: Finding[];
   resolvedFindings: Finding[];
   unchangedFindings: Finding[];
+  suppressedFindings: Finding[];
 };
 
 export type ScanHistoryResponse = {

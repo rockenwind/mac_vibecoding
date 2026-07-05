@@ -41,6 +41,121 @@ describe("Home", () => {
             })
           };
         }
+        if (url === "/api/scans/settings") {
+          if (init?.method === "PATCH") {
+            const payload = JSON.parse(String(init.body ?? "{}")) as { action?: string; ruleId?: string; enabled?: boolean; repositoryKey?: string; scanId?: string };
+            return {
+              ok: true,
+              json: async () => ({
+                settings: {
+                  baselines:
+                    payload.action === "setBaseline"
+                      ? [{ repositoryKey: payload.repositoryKey, scanId: payload.scanId, updatedAt: "2026-07-02T00:10:00.000Z" }]
+                      : [],
+                  suppressions: [],
+                  rules:
+                    payload.action === "setRuleEnabled" && payload.ruleId
+                      ? [{ ruleId: payload.ruleId, enabled: Boolean(payload.enabled), updatedAt: "2026-07-02T00:10:00.000Z" }]
+                      : []
+                },
+                rules: [
+                  {
+                    ruleId: "secret.exposed-token",
+                    title: "Possible exposed credential",
+                    severity: "critical",
+                    category: "secret"
+                  }
+                ]
+              })
+            };
+          }
+          return {
+            ok: true,
+            json: async () => ({
+              settings: { baselines: [], suppressions: [], rules: [] },
+              rules: [
+                {
+                  ruleId: "secret.exposed-token",
+                  title: "Possible exposed credential",
+                  severity: "critical",
+                  category: "secret"
+                }
+              ]
+            })
+          };
+        }
+        if (url === "/api/scans/scan_test") {
+          return {
+            ok: true,
+            json: async () => ({
+              scan: {
+                id: "scan_test",
+                repository: {
+                  owner: "example",
+                  name: "repo",
+                  url: "https://github.com/example/repo",
+                  defaultBranch: "main"
+                },
+                summary: { critical: 1, high: 0, medium: 0, low: 0, info: 0 },
+                warnings: [],
+                findings: [
+                  {
+                    id: "secret.exposed-token:.env:1",
+                    ruleId: "secret.exposed-token",
+                    title: "Possible exposed credential",
+                    severity: "critical",
+                    confidence: "high",
+                    category: "secret",
+                    filePath: ".env",
+                    lineStart: 1,
+                    lineEnd: 1,
+                    evidence: "OPENAI_API_KEY=sk-...redacted...",
+                    whyItMatters: "Exposed credentials can let attackers access services.",
+                    fixSuggestion: "Revoke the credential and load it from a secret manager."
+                  }
+                ]
+              },
+              history: {
+                savedAt: "2026-07-02T00:05:00.000Z",
+                scan: {
+                  id: "scan_test",
+                  repository: {
+                    owner: "example",
+                    name: "repo",
+                    url: "https://github.com/example/repo",
+                    defaultBranch: "main"
+                  },
+                  summary: { critical: 1, high: 0, medium: 0, low: 0, info: 0 },
+                  warnings: [],
+                  findings: []
+                }
+              },
+              comparison: {
+                previousScanId: "scan_previous",
+                comparisonSource: "previous",
+                newFindings: [
+                  {
+                    id: "secret.exposed-token:.env:1",
+                    ruleId: "secret.exposed-token",
+                    title: "Possible exposed credential",
+                    severity: "critical",
+                    confidence: "high",
+                    category: "secret",
+                    filePath: ".env",
+                    lineStart: 1,
+                    lineEnd: 1,
+                    evidence: "OPENAI_API_KEY=sk-...redacted...",
+                    whyItMatters: "Exposed credentials can let attackers access services.",
+                    fixSuggestion: "Revoke the credential and load it from a secret manager."
+                  }
+                ],
+                resolvedFindings: [],
+                unchangedFindings: [],
+                suppressedFindings: []
+              }
+            })
+          };
+        }
         if (url === "/api/scans/scan_previous" && init?.method === "DELETE") {
           return {
             ok: true,
@@ -95,6 +210,7 @@ describe("Home", () => {
               },
               comparison: {
                 previousScanId: "scan_older",
+                comparisonSource: "previous",
                 newFindings: [
                   {
                     id: "secret.exposed-token:.env:1",
@@ -112,7 +228,8 @@ describe("Home", () => {
                   }
                 ],
                 resolvedFindings: [],
-                unchangedFindings: []
+                unchangedFindings: [],
+                suppressedFindings: []
               }
             })
           };
@@ -175,6 +292,7 @@ describe("Home", () => {
             },
             comparison: {
               previousScanId: "scan_previous",
+              comparisonSource: "previous",
               newFindings: [
                 {
                   id: "secret.exposed-token:.env:1",
@@ -192,7 +310,8 @@ describe("Home", () => {
                 }
               ],
               resolvedFindings: [],
-              unchangedFindings: []
+              unchangedFindings: [],
+              suppressedFindings: []
             },
             history: {
               savedAt: "2026-07-02T00:05:00.000Z",
@@ -268,12 +387,61 @@ describe("Home", () => {
     expect(screen.getByRole("link", { name: "마크다운 보고서 / Markdown report" })).toBeInTheDocument();
   });
 
+  it("renders rule settings and can toggle a rule", async () => {
+    const fetchMock = vi.mocked(fetch);
+    render(<Home />);
+
+    expect(await screen.findByRole("heading", { name: "스캔 설정 / Scan settings" })).toBeInTheDocument();
+    const ruleToggle = await screen.findByLabelText(/Possible exposed credential/);
+
+    fireEvent.click(ruleToggle);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/scans/settings",
+        expect.objectContaining({
+          method: "PATCH",
+          body: expect.stringContaining("setRuleEnabled")
+        })
+      );
+    });
+  });
+
+  it("shows scan progress while scanning", async () => {
+    render(<Home />);
+
+    fireEvent.change(screen.getByLabelText("GitHub repository URL"), {
+      target: { value: "https://github.com/example/repo" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Scan repository" }));
+
+    expect(await screen.findByText(/진행 상태 \/ Progress/)).toBeInTheDocument();
+  });
+
   it("loads and renders recent scan history", async () => {
     render(<Home />);
 
     expect(await screen.findByText("최근 스캔 / Recent scans")).toBeInTheDocument();
     expect(screen.getAllByText("example/repo").length).toBeGreaterThan(0);
     expect(screen.getByText("scan_previous")).toBeInTheDocument();
+  });
+
+  it("can mark a recent scan as baseline", async () => {
+    const fetchMock = vi.mocked(fetch);
+    render(<Home />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "기준선 지정 / Set baseline scan_previous" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/scans/settings",
+        expect.objectContaining({
+          method: "PATCH",
+          body: expect.stringContaining("setBaseline")
+        })
+      );
+    });
+    expect(await screen.findByRole("button", { name: "기준선 지정 / Set baseline scan_previous" })).toBeDisabled();
   });
 
   it("opens a saved scan from recent history with details and comparison", async () => {
@@ -367,6 +535,45 @@ describe("Home", () => {
     expect(screen.getByText("해결됨 / Resolved")).toBeInTheDocument();
     expect(screen.getByText("유지됨 / Unchanged")).toBeInTheDocument();
     expect(screen.getAllByText("Possible exposed credential").length).toBeGreaterThan(0);
+  });
+
+  it("can mark a finding as false positive", async () => {
+    const fetchMock = vi.mocked(fetch);
+    render(<Home />);
+
+    fireEvent.change(screen.getByLabelText("GitHub repository URL"), {
+      target: { value: "https://github.com/example/repo" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Scan repository" }));
+
+    fireEvent.click(await screen.findByRole("button", { name: "오탐 처리 / Mark false positive" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/scans/settings",
+        expect.objectContaining({
+          method: "PATCH",
+          body: expect.stringContaining("suppressFinding")
+        })
+      );
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/발견 항목 \/ Findings: 0/)).toBeInTheDocument();
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: "오탐 해제 / Restore finding" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/scans/settings",
+        expect.objectContaining({
+          method: "PATCH",
+          body: expect.stringContaining("unsuppressFinding")
+        })
+      );
+    });
+    expect(await screen.findByText(/발견 항목 \/ Findings: 1/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "새 발견 항목 / New findings" })).toBeInTheDocument();
   });
 
   it("renders detailed comparison groups", async () => {
@@ -476,7 +683,15 @@ describe("Home", () => {
             warnings: [],
             findings: []
           },
-          comparison: { previousScanId: null, newFindings: [], resolvedFindings: [], unchangedFindings: [] },
+          comparison: {
+            previousScanId: null,
+            baselineScanId: null,
+            comparisonSource: "none",
+            newFindings: [],
+            resolvedFindings: [],
+            unchangedFindings: [],
+            suppressedFindings: []
+          },
           history: {
             savedAt: "2026-07-02T00:00:00.000Z",
             scan: {

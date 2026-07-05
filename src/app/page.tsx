@@ -1,8 +1,9 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import type { Finding, FindingConfidence, ScanResult, Severity } from "@/lib/scanner/types";
+import type { Finding, FindingConfidence, ScanResult, ScanSummary, Severity } from "@/lib/scanner/types";
 import type { ScanComparison, ScanHistoryEntry } from "@/lib/scanHistory/types";
+import { findingFingerprint } from "@/lib/scanHistory/fingerprint";
 
 const severities: Severity[] = ["critical", "high", "medium", "low", "info"];
 
@@ -63,6 +64,25 @@ type DeleteScanResponse = {
   error?: string;
 };
 
+type ScanSettings = {
+  baselines: Array<{ repositoryKey: string; scanId: string; updatedAt: string }>;
+  suppressions: Array<{ repositoryKey: string; fingerprint: string; reason?: string; createdAt: string }>;
+  rules: Array<{ ruleId: string; enabled: boolean; updatedAt: string }>;
+};
+
+type AnalyzerRule = {
+  ruleId: string;
+  title: string;
+  severity: Severity;
+  category: Finding["category"];
+};
+
+type ScanSettingsResponse = {
+  settings?: ScanSettings;
+  rules?: AnalyzerRule[];
+  error?: string;
+};
+
 type GitHubInstallation = {
   id: number;
   account: string;
@@ -106,20 +126,34 @@ function confidenceLabel(finding: Finding): string {
   return confidenceLabels[finding.confidence ?? "medium"];
 }
 
-function summarizeRisk(scan: ScanResult): string {
-  if (scan.summary.critical > 0) {
-    return `Critical ${scan.summary.critical}개가 발견되어 즉시 조치가 필요합니다.`;
+function repositoryKeyForScan(scan: ScanResult): string {
+  return `${scan.repository.owner}/${scan.repository.name}`;
+}
+
+function summarizeFindings(summary: ScanSummary, findings: Finding[]): string {
+  if (summary.critical > 0) {
+    return `Critical ${summary.critical}개가 발견되어 즉시 조치가 필요합니다.`;
   }
 
-  if (scan.summary.high > 0) {
-    return `High ${scan.summary.high}개가 발견되어 우선 검토가 필요합니다.`;
+  if (summary.high > 0) {
+    return `High ${summary.high}개가 발견되어 우선 검토가 필요합니다.`;
   }
 
-  if (scan.findings.length > 0) {
-    return `${scan.findings.length}개 발견 항목을 계획적으로 검토하세요.`;
+  if (findings.length > 0) {
+    return `${findings.length}개 발견 항목을 계획적으로 검토하세요.`;
   }
 
   return "현재 스캔 범위에서는 조치가 필요한 보안 위험이 발견되지 않았습니다.";
+}
+
+function summarizeVisibleFindings(findings: Finding[]): ScanSummary {
+  return findings.reduce<ScanSummary>(
+    (summary, finding) => ({
+      ...summary,
+      [finding.severity]: summary[finding.severity] + 1
+    }),
+    { critical: 0, high: 0, medium: 0, low: 0, info: 0 }
+  );
 }
 
 function highestRiskFinding(findings: Finding[]): Finding | undefined {
@@ -154,9 +188,23 @@ export default function Home() {
   const [repositoryStatus, setRepositoryStatus] = useState<string | null>(null);
   const [isLoadingInstallations, setIsLoadingInstallations] = useState(false);
   const [isLoadingRepositories, setIsLoadingRepositories] = useState(false);
+  const [scanSettings, setScanSettings] = useState<ScanSettings>({ baselines: [], suppressions: [], rules: [] });
+  const [analyzerRules, setAnalyzerRules] = useState<AnalyzerRule[]>([]);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [scanProgress, setScanProgress] = useState<string | null>(null);
+  const [isUpdatingSettings, setIsUpdatingSettings] = useState(false);
 
-  const hasFindings = Boolean(scan?.findings.length);
-  const findingCount = scan?.findings.length ?? 0;
+  const suppressedFingerprints = useMemo(
+    () => new Set((comparison?.suppressedFindings ?? []).map((finding) => findingFingerprint(finding))),
+    [comparison]
+  );
+  const visibleFindings = useMemo(
+    () => (scan?.findings ?? []).filter((finding) => !suppressedFingerprints.has(findingFingerprint(finding))),
+    [scan, suppressedFingerprints]
+  );
+  const visibleSummary = useMemo(() => summarizeVisibleFindings(visibleFindings), [visibleFindings]);
+  const hasFindings = Boolean(visibleFindings.length);
+  const findingCount = visibleFindings.length;
   const reportJson = useMemo(() => (scan ? JSON.stringify(scan, null, 2) : ""), [scan]);
   const recentHistory = scanHistory.slice(0, 5);
 
@@ -208,8 +256,29 @@ export default function Home() {
       }
     }
 
+    async function loadSettings() {
+      try {
+        const response = await fetch("/api/scans/settings");
+        const data = (await response.json()) as ScanSettingsResponse;
+        if (!response.ok || !data.settings) {
+          throw new Error(data.error ?? "Could not load scan settings.");
+        }
+        if (isMounted) {
+          setScanSettings(data.settings);
+          setAnalyzerRules(data.rules ?? []);
+          setSettingsError(null);
+        }
+      } catch (loadError) {
+        if (isMounted) {
+          const message = loadError instanceof Error ? loadError.message : "Could not load scan settings.";
+          setSettingsError(message);
+        }
+      }
+    }
+
     void loadHistory();
     void loadInstallations();
+    void loadSettings();
 
     return () => {
       isMounted = false;
@@ -263,6 +332,104 @@ export default function Home() {
     }
   }
 
+  async function updateScanSettings(payload: Record<string, unknown>) {
+    setIsUpdatingSettings(true);
+    setSettingsError(null);
+    try {
+      const response = await fetch("/api/scans/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = (await response.json()) as ScanSettingsResponse;
+      if (!response.ok || !data.settings) {
+        throw new Error(data.error ?? "Scan settings could not be updated.");
+      }
+      setScanSettings(data.settings);
+      setAnalyzerRules(data.rules ?? analyzerRules);
+      return data.settings;
+    } catch (settingsUpdateError) {
+      const message =
+        settingsUpdateError instanceof Error ? settingsUpdateError.message : "Scan settings could not be updated.";
+      setSettingsError(message);
+      return null;
+    } finally {
+      setIsUpdatingSettings(false);
+    }
+  }
+
+  async function handleSetBaseline(scanId: string, repositoryKey: string) {
+    await updateScanSettings({ action: "setBaseline", repositoryKey, scanId });
+  }
+
+  async function handleRuleToggle(ruleId: string, enabled: boolean) {
+    await updateScanSettings({ action: "setRuleEnabled", ruleId, enabled });
+  }
+
+  async function handleSuppressFinding(finding: Finding) {
+    if (!scan) {
+      return;
+    }
+
+    const settings = await updateScanSettings({
+      action: "suppressFinding",
+      repositoryKey: repositoryKeyForScan(scan),
+      fingerprint: findingFingerprint(finding),
+      reason: "사용자가 오탐으로 처리"
+    });
+
+    if (settings) {
+      setComparison((current) =>
+        current
+          ? {
+              ...current,
+              newFindings: current.newFindings.filter(
+                (candidate) => findingFingerprint(candidate) !== findingFingerprint(finding)
+              ),
+              unchangedFindings: current.unchangedFindings.filter(
+                (candidate) => findingFingerprint(candidate) !== findingFingerprint(finding)
+              ),
+              suppressedFindings: [...(current.suppressedFindings ?? []), finding]
+            }
+          : current
+      );
+    }
+  }
+
+  async function handleUnsuppressFinding(finding: Finding) {
+    if (!scan) {
+      return;
+    }
+
+    const currentScanId = scan.id;
+    const settings = await updateScanSettings({
+      action: "unsuppressFinding",
+      repositoryKey: repositoryKeyForScan(scan),
+      fingerprint: findingFingerprint(finding)
+    });
+
+    if (settings) {
+      try {
+        await refreshCurrentScan(currentScanId);
+      } catch (refreshError) {
+        const message = refreshError instanceof Error ? refreshError.message : "Scan could not be refreshed.";
+        setSettingsError(message);
+      }
+    }
+  }
+
+  async function refreshCurrentScan(scanId: string) {
+    const response = await fetch(`/api/scans/${encodeURIComponent(scanId)}`);
+    const data = (await response.json()) as SavedScanResponse;
+
+    if (!response.ok || !data.scan) {
+      throw new Error(data.error ?? "Scan could not be refreshed.");
+    }
+
+    setScan(data.scan);
+    setComparison(data.comparison ?? null);
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
@@ -272,8 +439,10 @@ export default function Home() {
     setIssueUrl(null);
     setSelectedSavedAt(null);
     setIsScanning(true);
+    setScanProgress("저장소 확인 중 / Checking repository");
 
     try {
+      setScanProgress("파일 가져오는 중 / Fetching files");
       const response = await fetch("/api/scans", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -292,7 +461,9 @@ export default function Home() {
         throw new Error("Scan response did not include a report.");
       }
 
+      setScanProgress("규칙 점검 중 / Running rules");
       setScan(data.scan);
+      setScanProgress("결과 저장 중 / Saving result");
       setComparison(data.comparison ?? null);
       setSelectedSavedAt(null);
       if (data.history) {
@@ -301,11 +472,13 @@ export default function Home() {
           ...currentHistory.filter((entry) => entry.scan.id !== data.history?.scan.id)
         ]);
       }
+      setScanProgress("완료 / Complete");
     } catch (scanError) {
       const message = scanError instanceof Error ? scanError.message : "Scan failed.";
       setScan(null);
       setComparison(null);
       setError(message);
+      setScanProgress("실패 / Failed");
     } finally {
       setIsScanning(false);
     }
@@ -498,6 +671,40 @@ export default function Home() {
           </div>
         </form>
 
+        <section className="panel settings-panel" aria-labelledby="settings-title">
+          <div className="panel-heading">
+            <h2 id="settings-title">스캔 설정 / Scan settings</h2>
+            <span className="scan-id">{isUpdatingSettings ? "저장 중 / Saving" : "저장됨 / Saved"}</span>
+          </div>
+          {settingsError ? (
+            <p className="history-error" role="status">{settingsError}</p>
+          ) : null}
+          <div className="rule-settings" aria-label="규칙별 사용 여부 / Rule toggles">
+            {analyzerRules.map((rule) => {
+              const setting = scanSettings.rules.find((candidate) => candidate.ruleId === rule.ruleId);
+              const enabled = setting?.enabled ?? true;
+              return (
+                <label className="rule-toggle" key={rule.ruleId}>
+                  <input
+                    checked={enabled}
+                    disabled={isUpdatingSettings}
+                    onChange={(event) => void handleRuleToggle(rule.ruleId, event.target.checked)}
+                    type="checkbox"
+                  />
+                  <span>{rule.title}</span>
+                  <small>{rule.ruleId}</small>
+                </label>
+              );
+            })}
+          </div>
+        </section>
+
+        {scanProgress ? (
+          <div className="status-message" role="status">
+            진행 상태 / Progress: {scanProgress}
+          </div>
+        ) : null}
+
         {error ? (
           <div className="status-message status-error" role="alert">
             {error}
@@ -530,11 +737,18 @@ export default function Home() {
               {recentHistory.map((entry) => (
                 <HistoryEntryItem
                   entry={entry}
+                  baselineScanId={
+                    scanSettings.baselines.find(
+                      (baseline) => baseline.repositoryKey === repositoryKeyForScan(entry.scan)
+                    )?.scanId ?? null
+                  }
                   isDeleting={isDeletingScanId === entry.scan.id}
                   isLoading={isLoadingSavedScanId === entry.scan.id}
+                  isUpdatingSettings={isUpdatingSettings}
                   key={`${entry.savedAt}-${entry.scan.id}`}
                   onDelete={handleDeleteSavedScan}
                   onOpen={handleOpenSavedScan}
+                  onSetBaseline={handleSetBaseline}
                 />
               ))}
             </ul>
@@ -559,7 +773,7 @@ export default function Home() {
                   <div className="severity-cell" key={severity}>
                     <span className="summary-label">{severity}</span>
                     <strong className={`summary-count severity-${severity}`}>
-                      {scan.summary[severity]}
+                      {visibleSummary[severity]}
                     </strong>
                   </div>
                 ))}
@@ -578,16 +792,16 @@ export default function Home() {
 
               <section className="risk-summary" aria-labelledby="risk-summary-title">
                 <h3 id="risk-summary-title">위험 요약 / Risk summary</h3>
-                <p>{summarizeRisk(scan)}</p>
+                <p>{summarizeFindings(visibleSummary, visibleFindings)}</p>
                 <div className="risk-summary-grid">
                   <div>
                     <span>즉시 조치 / Immediate</span>
-                    <strong>{scan.summary.critical}</strong>
+                    <strong>{visibleSummary.critical}</strong>
                     <small>Critical</small>
                   </div>
                   <div>
                     <span>우선 검토 / Priority</span>
-                    <strong>{scan.summary.high}</strong>
+                    <strong>{visibleSummary.high}</strong>
                     <small>High</small>
                   </div>
                 </div>
@@ -597,7 +811,10 @@ export default function Home() {
                 <section className="comparison-panel" aria-labelledby="comparison-title">
                   <h3 id="comparison-title">비교 / Comparison</h3>
                   {comparison.previousScanId ? (
-                    <p className="comparison-source">비교 기준 / Compared with {comparison.previousScanId}</p>
+                    <p className="comparison-source">
+                      비교 기준 / Compared with {comparison.previousScanId}
+                      {comparison.comparisonSource === "baseline" ? " · 기준선 / Baseline" : " · 직전 스캔 / Previous scan"}
+                    </p>
                   ) : (
                     <p className="comparison-source">이 저장소의 이전 스캔이 없습니다. / No previous scan for this repository.</p>
                   )}
@@ -630,6 +847,11 @@ export default function Home() {
                     emptyText="유지된 항목이 없습니다. / No unchanged findings."
                     findings={comparison.unchangedFindings}
                   />
+                  <ComparisonList
+                    title="오탐 처리됨 / Suppressed findings"
+                    emptyText="오탐 처리된 항목이 없습니다. / No suppressed findings."
+                    findings={comparison.suppressedFindings ?? []}
+                  />
                 </section>
               ) : null}
 
@@ -652,7 +874,7 @@ export default function Home() {
 
               {hasFindings ? (
                 <ul className="findings-list">
-                  {scan.findings.map((finding) => (
+                  {visibleFindings.map((finding) => (
                     <li className="finding-item" key={finding.id}>
                       <div className="finding-title-row">
                         <span className={`severity-badge severity-${finding.severity}`}>
@@ -710,6 +932,14 @@ export default function Home() {
                           <dd>{finding.ruleId}</dd>
                         </div>
                       </dl>
+                      <button
+                        className="secondary-action"
+                        disabled={isUpdatingSettings}
+                        onClick={() => void handleSuppressFinding(finding)}
+                        type="button"
+                      >
+                        오탐 처리 / Mark false positive
+                      </button>
                     </li>
                   ))}
                 </ul>
@@ -717,6 +947,38 @@ export default function Home() {
                 <p className="empty-state">스캔한 파일에서 발견 항목이 없습니다. / No findings were detected in the scanned files.</p>
               )}
             </section>
+
+            {comparison?.suppressedFindings?.length ? (
+              <section className="panel findings-panel" aria-labelledby="suppressed-title">
+                <div className="panel-heading">
+                  <h2 id="suppressed-title">오탐 처리됨 / Suppressed findings</h2>
+                </div>
+                <ul className="findings-list">
+                  {comparison.suppressedFindings.map((finding) => (
+                    <li className="finding-item" key={`suppressed-${finding.id}`}>
+                      <div className="finding-title-row">
+                        <span className={`severity-badge severity-${finding.severity}`}>
+                          {severityLabels[finding.severity]}
+                        </span>
+                        <h3>{finding.title}</h3>
+                      </div>
+                      <p className="finding-meta">
+                        <span>{finding.ruleId}</span>
+                        <span>{formatLocation(finding.filePath, finding.lineStart, finding.lineEnd)}</span>
+                      </p>
+                      <button
+                        className="secondary-action"
+                        disabled={isUpdatingSettings}
+                        onClick={() => void handleUnsuppressFinding(finding)}
+                        type="button"
+                      >
+                        오탐 해제 / Restore finding
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
 
             <section className="panel report-panel" aria-labelledby="report-title">
               <div className="report-actions">
@@ -795,20 +1057,28 @@ function ComparisonList({
 }
 
 function HistoryEntryItem({
+  baselineScanId,
   entry,
   isDeleting,
   isLoading,
+  isUpdatingSettings,
   onDelete,
-  onOpen
+  onOpen,
+  onSetBaseline
 }: {
+  baselineScanId: string | null;
   entry: ScanHistoryEntry;
   isDeleting: boolean;
   isLoading: boolean;
+  isUpdatingSettings: boolean;
   onDelete(scanId: string): void;
   onOpen(scanId: string): void;
+  onSetBaseline(scanId: string, repositoryKey: string): void;
 }) {
   const topFinding = highestRiskFinding(entry.scan.findings);
   const highRiskCount = entry.scan.summary.critical + entry.scan.summary.high;
+  const isBaseline = baselineScanId === entry.scan.id;
+  const key = repositoryKeyForScan(entry.scan);
 
   return (
     <li>
@@ -836,6 +1106,15 @@ function HistoryEntryItem({
             : `${entry.scan.findings.length} findings / 발견 · ${highRiskCount} high risk / 고위험`}
           {!isLoading && topFinding ? ` · ${severityPriorityLabels[topFinding.severity]}` : ""}
         </small>
+      </button>
+      <button
+        aria-label={`기준선 지정 / Set baseline ${entry.scan.id}`}
+        className="history-delete-button"
+        disabled={isUpdatingSettings || isBaseline}
+        onClick={() => onSetBaseline(entry.scan.id, key)}
+        type="button"
+      >
+        {isBaseline ? "기준선 / Baseline" : "기준선 지정 / Set baseline"}
       </button>
       <button
         aria-label={`삭제 / Delete ${entry.scan.id}`}

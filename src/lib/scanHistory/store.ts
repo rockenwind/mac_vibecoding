@@ -1,8 +1,10 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import type { ScanResult } from "@/lib/scanner/types";
+import type { Finding, ScanResult } from "@/lib/scanner/types";
 import type { ScanComparison, ScanHistoryEntry, ScanHistoryStore } from "./types";
+export { findingFingerprint } from "./fingerprint";
+import { findingFingerprint } from "./fingerprint";
 
 const defaultHistoryFile = join(process.cwd(), ".data", "scans.json");
 
@@ -158,26 +160,89 @@ export function findPreviousScan(
 
 export function compareScanResults(
   currentScan: ScanResult,
-  previousEntry: ScanHistoryEntry | null
+  previousEntry: ScanHistoryEntry | null,
+  options: {
+    baselineScanId?: string | null;
+    comparisonSource?: "previous" | "baseline" | "none";
+    suppressedFingerprints?: string[];
+  } = {}
 ): ScanComparison {
+  const suppressed = new Set(options.suppressedFingerprints ?? []);
+  const currentUnsuppressed = currentScan.findings.filter((finding) => !suppressed.has(findingFingerprint(finding)));
+  const suppressedFindings = currentScan.findings.filter((finding) => suppressed.has(findingFingerprint(finding)));
+
   if (!previousEntry) {
     return {
       previousScanId: null,
-      newFindings: currentScan.findings,
+      baselineScanId: options.baselineScanId ?? null,
+      comparisonSource: options.comparisonSource ?? "none",
+      newFindings: currentUnsuppressed,
       resolvedFindings: [],
-      unchangedFindings: []
+      unchangedFindings: [],
+      suppressedFindings
     };
   }
 
-  const previousById = new Map(previousEntry.scan.findings.map((finding) => [finding.id, finding]));
-  const currentById = new Map(currentScan.findings.map((finding) => [finding.id, finding]));
+  const previousByFingerprint = groupFindingsByFingerprint(previousEntry.scan.findings);
+  const currentByFingerprint = groupFindingsByFingerprint(currentUnsuppressed);
+  const { matchedCurrent, unmatchedCurrent, unmatchedPrevious } = matchFindingGroups(
+    currentByFingerprint,
+    previousByFingerprint,
+    suppressed
+  );
 
   return {
     previousScanId: previousEntry.scan.id,
-    newFindings: currentScan.findings.filter((finding) => !previousById.has(finding.id)),
-    resolvedFindings: previousEntry.scan.findings.filter((finding) => !currentById.has(finding.id)),
-    unchangedFindings: currentScan.findings.filter((finding) => previousById.has(finding.id))
+    baselineScanId: options.baselineScanId ?? null,
+    comparisonSource: options.comparisonSource ?? "previous",
+    newFindings: unmatchedCurrent,
+    resolvedFindings: unmatchedPrevious,
+    unchangedFindings: matchedCurrent,
+    suppressedFindings
   };
+}
+
+function groupFindingsByFingerprint(findings: Finding[]): Map<string, Finding[]> {
+  const grouped = new Map<string, Finding[]>();
+  for (const finding of findings) {
+    const fingerprint = findingFingerprint(finding);
+    grouped.set(fingerprint, [...(grouped.get(fingerprint) ?? []), finding]);
+  }
+  return grouped;
+}
+
+function matchFindingGroups(
+  currentByFingerprint: Map<string, Finding[]>,
+  previousByFingerprint: Map<string, Finding[]>,
+  suppressed: Set<string>
+): { matchedCurrent: Finding[]; unmatchedCurrent: Finding[]; unmatchedPrevious: Finding[] } {
+  const matchedCurrent: Finding[] = [];
+  const unmatchedCurrent: Finding[] = [];
+  const unmatchedPrevious: Finding[] = [];
+  const fingerprints = new Set([...currentByFingerprint.keys(), ...previousByFingerprint.keys()]);
+
+  for (const fingerprint of fingerprints) {
+    const currentFindings = currentByFingerprint.get(fingerprint) ?? [];
+    const previousFindings = previousByFingerprint.get(fingerprint) ?? [];
+    const matchedCount = Math.min(currentFindings.length, previousFindings.length);
+
+    matchedCurrent.push(...currentFindings.slice(0, matchedCount));
+    unmatchedCurrent.push(...currentFindings.slice(matchedCount));
+
+    if (!suppressed.has(fingerprint)) {
+      unmatchedPrevious.push(...previousFindings.slice(matchedCount));
+    }
+  }
+
+  return { matchedCurrent, unmatchedCurrent, unmatchedPrevious };
+}
+
+export function findScanById(scanId: string | null | undefined, history: ScanHistoryEntry[]): ScanHistoryEntry | null {
+  if (!scanId) {
+    return null;
+  }
+
+  return history.find((entry) => entry.scan.id === scanId) ?? null;
 }
 
 function getHistoryFile(): string {

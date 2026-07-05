@@ -6,10 +6,18 @@ import { readGitHubAppConfig } from "@/lib/github/appConfig";
 import { runScan } from "@/lib/scanner/scan";
 import {
   compareScanResults,
+  findScanById,
   findPreviousScan,
   readScanHistory,
   recordScan
 } from "@/lib/scanHistory/store";
+import {
+  baselineScanIdForRepository,
+  disabledRuleIds,
+  readScanSettings,
+  repositoryKey,
+  suppressedFingerprintsForRepository
+} from "@/lib/scanSettings/store";
 
 export async function GET(): Promise<Response> {
   try {
@@ -30,16 +38,28 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     const repository = parseGitHubRepositoryUrl(body.repositoryUrl);
+    const settings = await readScanSettings();
     const accessToken = await getInstallationAccessToken(body.installationId);
     const source = await fetchRepositoryFiles(
       repository,
       accessToken ? { accessToken } : undefined
     );
-    const scan = runScan(source);
+    const scan = runScan(source, { disabledRuleIds: disabledRuleIds(settings) });
     const existingHistory = await readScanHistory();
-    const previousScan = findPreviousScan(scan, existingHistory);
+    const key = repositoryKey(scan.repository);
+    const baselineScanId = baselineScanIdForRepository(settings, key);
+    const baselineScanCandidate = findScanById(baselineScanId, existingHistory);
+    const baselineScan =
+      baselineScanCandidate && repositoryKey(baselineScanCandidate.scan.repository) === key
+        ? baselineScanCandidate
+        : null;
+    const previousScan = baselineScan ?? findPreviousScan(scan, existingHistory);
     const history = await recordScan(scan);
-    const comparison = compareScanResults(scan, previousScan);
+    const comparison = compareScanResults(scan, previousScan, {
+      baselineScanId,
+      comparisonSource: baselineScan ? "baseline" : previousScan ? "previous" : "none",
+      suppressedFingerprints: suppressedFingerprintsForRepository(settings, key)
+    });
 
     return Response.json({ scan, history, comparison });
   } catch (error) {
