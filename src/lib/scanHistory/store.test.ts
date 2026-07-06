@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   compareScanResults,
   createJsonScanHistoryStore,
+  createPostgresScanHistoryStore,
   createSqliteScanHistoryStore,
   deleteScan,
   findingFingerprint,
@@ -113,6 +114,42 @@ describe("scan history store", () => {
     await expect(store.delete("scan_sqlite_old")).resolves.toBe(true);
     await expect(store.read()).resolves.toMatchObject([{ scan: { id: "scan_sqlite_new" } }]);
     await expect(store.delete("missing")).resolves.toBe(false);
+  });
+
+  it("can read, write, and delete through an injected Postgres history store", async () => {
+    const rows = new Map<string, { id: string; saved_at: string; scan_json: unknown }>();
+    const store = createPostgresScanHistoryStore("postgresql://example", () => ({
+      async query<Row = Record<string, unknown>>(sql: string, params: unknown[] = []) {
+        if (sql.includes("CREATE TABLE")) {
+          return { rows: [], rowCount: 0 };
+        }
+        if (sql.includes("INSERT INTO scan_history")) {
+          rows.set(String(params[0]), {
+            id: String(params[0]),
+            saved_at: String(params[1]),
+            scan_json: params[2]
+          });
+          return { rows: [], rowCount: 1 };
+        }
+        if (sql.includes("SELECT saved_at, scan_json FROM scan_history")) {
+          return {
+            rows: [...rows.values()].sort((left, right) => right.saved_at.localeCompare(left.saved_at)) as Row[],
+            rowCount: rows.size
+          };
+        }
+        if (sql.includes("DELETE FROM scan_history")) {
+          const deleted = rows.delete(String(params[0]));
+          return { rows: [], rowCount: deleted ? 1 : 0 };
+        }
+        throw new Error(`Unexpected query: ${sql}`);
+      }
+    }));
+
+    await store.record({ ...baseScan, id: "scan_postgres" }, new Date("2026-07-02T00:00:00Z"));
+
+    await expect(store.read()).resolves.toMatchObject([{ scan: { id: "scan_postgres" } }]);
+    await expect(store.delete("scan_postgres")).resolves.toBe(true);
+    await expect(store.read()).resolves.toEqual([]);
   });
 
   it("uses SQLite as the default store when SCAN_HISTORY_DATABASE_URL is configured", async () => {

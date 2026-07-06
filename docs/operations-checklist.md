@@ -19,7 +19,9 @@ Repository scan은 GitHub 코드 보안 점검 서비스다.
 - 기본 저장 위치는 `.data/scans.json`이다.
 - `SCAN_HISTORY_FILE` 환경 변수로 저장 파일 위치를 바꿀 수 있다.
 - `SCAN_HISTORY_DATABASE_URL=sqlite:.data/scans.sqlite`를 설정하면 SQLite에 저장한다.
+- `SCAN_HISTORY_DATABASE_URL=postgresql://...`를 설정하면 Postgres 또는 Neon에 저장한다.
 - `SCAN_HISTORY_DATABASE_URL`이 있으면 `SCAN_HISTORY_FILE`보다 우선한다.
+- 운영 배포에서는 Render 인스턴스 로컬 파일 대신 Postgres 또는 Neon을 사용한다.
 
 ### 배포 전 점검
 

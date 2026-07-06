@@ -72,7 +72,7 @@ sequenceDiagram
 | 저장소 선택 UI | 완료 | GitHub App 설치 목록과 접근 가능한 저장소 목록을 불러옵니다. |
 | 규칙 기반 분석 | 완료 | 비밀값, 위험한 실행, 프롬프트 주입, MCP, API 인증/권한 검토 항목을 탐지합니다. |
 | 상세 카드 | 완료 | 취약점, 우선순위, 위치, 근거, 영향도, 필요 조치를 표시합니다. |
-| 스캔 이력 | 완료 | JSON 또는 SQLite에 저장하고 과거 결과를 다시 열 수 있습니다. |
+| 스캔 이력 | 완료 | JSON, SQLite 또는 Postgres에 저장하고 과거 결과를 다시 열 수 있습니다. |
 | 비교 | 완료 | 기준선이 있으면 기준선과 비교하고, 없으면 직전 스캔과 비교합니다. |
 | 오탐 처리 | 완료 | 오탐 항목을 기본 목록과 보고서에서 제외하고 해제할 수 있습니다. |
 | 규칙 설정 | 완료 | 규칙별 사용 여부를 조정하고 새 스캔에 반영합니다. |
@@ -105,10 +105,14 @@ sequenceDiagram
 flowchart TD
   Scan["스캔 결과"] --> HistoryJson[".data/scans.json"]
   Scan --> HistorySqlite["SQLite 선택 저장"]
+  Scan --> HistoryPostgres["Postgres 운영 저장"]
   Settings["스캔 설정"] --> SettingsJson[".data/scan-settings.json"]
   Settings --> SettingsSqlite["SQLite 선택 저장"]
+  Settings --> SettingsPostgres["Postgres 운영 저장"]
   HistoryJson --> Replay["과거 스캔 재조회"]
+  HistoryPostgres --> Replay
   SettingsJson --> BaselineCompare["기준선 비교"]
+  SettingsPostgres --> BaselineCompare
   SettingsJson --> Suppression["오탐 제외"]
   SettingsJson --> RuleToggle["규칙 사용 여부"]
   SettingsJson --> Schedules["예약 스캔 설정"]
@@ -179,13 +183,19 @@ bash scripts/run-scheduled-scans-cron.sh
 DELETE /api/scans/{scanId}
 ```
 
-SQLite로 저장하려면 다음 환경 변수를 사용합니다.
+로컬에서 SQLite로 저장하려면 다음 환경 변수를 사용합니다.
 
 ```text
 SCAN_HISTORY_DATABASE_URL=sqlite:.data/scans.sqlite
 ```
 
-이 값이 있으면 JSON 파일 대신 SQLite 데이터베이스에 스캔 이력을 저장합니다.
+Render 같은 운영 환경에서는 Postgres 또는 Neon 연결 문자열을 같은 환경 변수에 넣습니다.
+
+```text
+SCAN_HISTORY_DATABASE_URL=postgresql://user:password@host/database?sslmode=require
+```
+
+이 값이 있으면 JSON 파일 대신 데이터베이스에 스캔 이력과 설정을 저장합니다. 저장되는 설정에는 기준선, 오탐 처리, 규칙 사용 여부, 예약 스캔 정보가 포함됩니다.
 
 ## GitHub App 연동 기반
 
@@ -271,7 +281,7 @@ pnpm run github:check
 - GitHub App 설치가 설정된 경우 권한이 있는 저장소를 선택해 점검할 수 있습니다.
 - 비공개 저장소는 GitHub App installation ID가 있어야 점검할 수 있습니다.
 - 점검은 규칙 기반으로 동작합니다.
-- 스캔 이력과 설정은 로컬 파일 또는 SQLite에 저장합니다.
+- 스캔 이력과 설정은 로컬 파일, SQLite 또는 Postgres에 저장합니다.
 - 사용자 계정, 팀 권한 관리, 원격 저장 결과 관리는 아직 포함하지 않습니다.
 - 외부 대시보드나 별도 업무 데이터 없이 독립적으로 동작합니다.
 
