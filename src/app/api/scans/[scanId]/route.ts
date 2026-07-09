@@ -1,3 +1,4 @@
+import { requireAdminToken } from "@/lib/api/adminAuth";
 import type { ScanResult } from "@/lib/scanner/types";
 import {
   compareScanResults,
@@ -53,7 +54,12 @@ export async function GET(_request: Request, context: RouteContext): Promise<Res
   }
 }
 
-export async function DELETE(_request: Request, context: RouteContext): Promise<Response> {
+export async function DELETE(request: Request, context: RouteContext): Promise<Response> {
+  const unauthorized = requireAdminToken(request);
+  if (unauthorized) {
+    return unauthorized;
+  }
+
   try {
     const { scanId } = await context.params;
     const deleted = await deleteScan(scanId);

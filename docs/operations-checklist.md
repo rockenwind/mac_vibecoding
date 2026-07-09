@@ -30,6 +30,12 @@ Repository scan은 GitHub 코드 보안 점검 서비스다.
 - `.github/workflows/repository-scan-scheduled-runner.yml`이 1시간마다 `run-due` API를 호출한다.
 - GitHub Actions의 `Repository scan scheduled runner` 워크플로에서 수동 실행으로도 확인할 수 있다.
 
+### 관리자 변경 작업 점검
+
+- Render Web Service에 `SCAN_ADMIN_TOKEN` 환경 변수가 있어야 한다.
+- 웹 화면의 `관리자 토큰 / Admin token` 입력란에 같은 값을 넣어야 수동 스캔, 예약 저장/삭제, 설정 변경, 이력 삭제, GitHub Issue 생성이 동작한다.
+- 토큰이 없거나 다르면 변경 API는 `401`을 반환해야 한다.
+
 ### 배포 전 점검
 
 ```bash

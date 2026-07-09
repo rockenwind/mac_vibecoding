@@ -1,3 +1,4 @@
+import { requireAdminToken } from "@/lib/api/adminAuth";
 import { parseGitHubRepositoryUrl } from "@/lib/github/url";
 import {
   deleteScanSchedule,
@@ -17,6 +18,11 @@ export async function GET(): Promise<Response> {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  const unauthorized = requireAdminToken(request);
+  if (unauthorized) {
+    return unauthorized;
+  }
+
   try {
     const body = (await request.json()) as Record<string, unknown>;
     const repositoryUrl = readString(body.repositoryUrl, "repositoryUrl");
@@ -43,6 +49,11 @@ export async function POST(request: Request): Promise<Response> {
 }
 
 export async function DELETE(request: Request): Promise<Response> {
+  const unauthorized = requireAdminToken(request);
+  if (unauthorized) {
+    return unauthorized;
+  }
+
   try {
     const repositoryKeyParam = new URL(request.url).searchParams.get("repositoryKey");
     if (!repositoryKeyParam) {

@@ -28,6 +28,7 @@ vi.mock("@/lib/scanHistory/store", () => ({
 describe("/api/scans/settings", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    delete process.env.SCAN_ADMIN_TOKEN;
     mocks.readScanSettings.mockResolvedValue({ baselines: [], suppressions: [], rules: [] });
     mocks.readScanHistory.mockResolvedValue([
       {
@@ -74,6 +75,42 @@ describe("/api/scans/settings", () => {
     expect(response.status).toBe(200);
     expect(body.settings.baselines[0].scanId).toBe("scan_1");
     expect(mocks.setBaselineScan).toHaveBeenCalledWith("example/repo", "scan_1");
+  });
+
+  it("requires an admin bearer token before updating settings when configured", async () => {
+    process.env.SCAN_ADMIN_TOKEN = "admin-token";
+
+    const response = await PATCH(
+      new Request("http://localhost/api/scans/settings", {
+        method: "PATCH",
+        body: JSON.stringify({ action: "setRuleEnabled", ruleId: "secret.exposed-token", enabled: false })
+      })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body.error).toBe("Admin token is required.");
+    expect(mocks.setRuleEnabled).not.toHaveBeenCalled();
+  });
+
+  it("accepts the configured admin bearer token before updating settings", async () => {
+    process.env.SCAN_ADMIN_TOKEN = "admin-token";
+    mocks.setRuleEnabled.mockResolvedValue({
+      baselines: [],
+      suppressions: [],
+      rules: [{ ruleId: "secret.exposed-token", enabled: false, updatedAt: "now" }]
+    });
+
+    const response = await PATCH(
+      new Request("http://localhost/api/scans/settings", {
+        method: "PATCH",
+        headers: { Authorization: "Bearer admin-token" },
+        body: JSON.stringify({ action: "setRuleEnabled", ruleId: "secret.exposed-token", enabled: false })
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.setRuleEnabled).toHaveBeenCalledWith("secret.exposed-token", false);
   });
 
   it("rejects a baseline scan from another repository", async () => {

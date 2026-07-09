@@ -29,6 +29,7 @@ vi.mock("@/lib/github/appClient", () => ({
 describe("POST /api/scans/[scanId]/github-issue", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    delete process.env.SCAN_ADMIN_TOKEN;
     mocks.readScanHistory.mockResolvedValue([
       {
         savedAt: "2026-07-02T00:00:00.000Z",
@@ -78,6 +79,39 @@ describe("POST /api/scans/[scanId]/github-issue", () => {
         labels: ["security", "repository-scan"]
       })
     );
+  });
+
+  it("requires an admin bearer token before creating a GitHub Issue when configured", async () => {
+    process.env.SCAN_ADMIN_TOKEN = "admin-token";
+
+    const response = await POST(
+      new Request("http://localhost/api/scans/scan_test/github-issue", {
+        method: "POST",
+        body: JSON.stringify({ installationId: 123 })
+      }),
+      { params: Promise.resolve({ scanId: "scan_test" }) }
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body.error).toBe("Admin token is required.");
+    expect(mocks.createGitHubIssue).not.toHaveBeenCalled();
+  });
+
+  it("accepts the configured admin bearer token before creating a GitHub Issue", async () => {
+    process.env.SCAN_ADMIN_TOKEN = "admin-token";
+
+    const response = await POST(
+      new Request("http://localhost/api/scans/scan_test/github-issue", {
+        method: "POST",
+        headers: { Authorization: "Bearer admin-token" },
+        body: JSON.stringify({ installationId: 123 })
+      }),
+      { params: Promise.resolve({ scanId: "scan_test" }) }
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.createGitHubIssue).toHaveBeenCalled();
   });
 
   it("returns 404 when the scan is missing", async () => {

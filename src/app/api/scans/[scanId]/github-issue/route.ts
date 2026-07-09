@@ -1,3 +1,4 @@
+import { requireAdminToken } from "@/lib/api/adminAuth";
 import { createGitHubAppJwt } from "@/lib/github/appAuth";
 import {
   GitHubAppApiError,
@@ -13,6 +14,11 @@ type RouteContext = {
 };
 
 export async function POST(request: Request, context: RouteContext): Promise<Response> {
+  const unauthorized = requireAdminToken(request);
+  if (unauthorized) {
+    return unauthorized;
+  }
+
   const { scanId } = await context.params;
   const body = (await request.json()) as { installationId?: unknown };
   const installationId = parseInstallationId(body.installationId);

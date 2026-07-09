@@ -202,6 +202,65 @@ describe("analyzeFiles", () => {
     );
   });
 
+  it("does not flag safe example environment templates as committed secrets", () => {
+    const findings = analyzeFiles([
+      {
+        path: ".env.example",
+        size: 72,
+        content: "SCHEDULE_RUN_TOKEN=replace-me-with-a-random-token\n"
+      }
+    ]);
+
+    expect(findings.map((finding) => finding.ruleId)).not.toEqual(
+      expect.arrayContaining(["secret.env-file", "secret.exposed-token"])
+    );
+  });
+
+  it("does not treat test and planning examples as production vulnerabilities", () => {
+    const findings = analyzeFiles([
+      {
+        path: "src/lib/scanner/redaction.test.ts",
+        size: 120,
+        content: "expect(redactSecrets(\"OPENAI_API_KEY=sk-proj-abcdefghijklmnopqrstuvwxyz123456\")).toBe(\"x\");\n"
+      },
+      {
+        path: "docs/superpowers/plans/example.md",
+        size: 180,
+        content:
+          "content: \"import { exec } from 'child_process';\\nexport function run(cmd: string) { exec(cmd); }\\n\"\n"
+      }
+    ]);
+
+    expect(findings.map((finding) => finding.ruleId)).not.toEqual(
+      expect.arrayContaining(["secret.exposed-token", "dangerous-execution.child-process"])
+    );
+  });
+
+  it("does not flag environment variable references as exposed secret values", () => {
+    const findings = analyzeFiles([
+      {
+        path: "src/app/api/scans/schedules/run-due/route.ts",
+        size: 120,
+        content: "const configuredToken = process.env.SCHEDULE_RUN_TOKEN?.trim();\n"
+      }
+    ]);
+
+    expect(findings.map((finding) => finding.ruleId)).not.toContain("secret.exposed-token");
+  });
+
+  it("treats the shared admin token guard as authentication review coverage", () => {
+    const findings = analyzeFiles([
+      {
+        path: "src/app/api/scans/route.ts",
+        size: 180,
+        content:
+          "export async function POST(request: Request) {\n  const unauthorized = requireAdminToken(request);\n  if (unauthorized) return unauthorized;\n  return Response.json({ ok: true });\n}\n"
+      }
+    ]);
+
+    expect(findings.map((finding) => finding.ruleId)).not.toContain("api.missing-auth-review");
+  });
+
   it("does not flag MCP configs with only shell access or only broad filesystem access", () => {
     const findings = analyzeFiles([
       {

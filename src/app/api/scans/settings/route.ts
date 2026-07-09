@@ -1,3 +1,4 @@
+import { requireAdminToken } from "@/lib/api/adminAuth";
 import {
   clearBaselineScan,
   readScanSettings,
@@ -28,6 +29,11 @@ export async function GET(): Promise<Response> {
 }
 
 export async function PATCH(request: Request): Promise<Response> {
+  const unauthorized = requireAdminToken(request);
+  if (unauthorized) {
+    return unauthorized;
+  }
+
   try {
     const body = (await request.json()) as SettingsAction;
     const settings = await applyAction(body);

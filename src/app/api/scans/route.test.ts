@@ -53,6 +53,7 @@ vi.mock("@/lib/github/appClient", () => ({
 describe("POST /api/scans", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    delete process.env.SCAN_ADMIN_TOKEN;
     mocks.fetchRepositoryFiles.mockResolvedValue({
       repository: {
         owner: "example",
@@ -112,6 +113,37 @@ describe("POST /api/scans", () => {
     expect(body.scan.findings.length).toBeGreaterThan(0);
     expect(body.history.savedAt).toBe("2026-07-02T00:00:00.000Z");
     expect(body.comparison.newFindings.length).toBeGreaterThan(0);
+  });
+
+  it("requires an admin bearer token before running a scan when configured", async () => {
+    process.env.SCAN_ADMIN_TOKEN = "admin-token";
+
+    const response = await POST(
+      new Request("http://localhost/api/scans", {
+        method: "POST",
+        body: JSON.stringify({ repositoryUrl: "https://github.com/example/repo" })
+      })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body.error).toBe("Admin token is required.");
+    expect(mocks.fetchRepositoryFiles).not.toHaveBeenCalled();
+  });
+
+  it("accepts the configured admin bearer token before running a scan", async () => {
+    process.env.SCAN_ADMIN_TOKEN = "admin-token";
+
+    const response = await POST(
+      new Request("http://localhost/api/scans", {
+        method: "POST",
+        headers: { Authorization: "Bearer admin-token" },
+        body: JSON.stringify({ repositoryUrl: "https://github.com/example/repo" })
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.fetchRepositoryFiles).toHaveBeenCalled();
   });
 
   it("keeps repository scan results independent from job signal metadata", async () => {
@@ -305,6 +337,7 @@ describe("POST /api/scans", () => {
 describe("GET /api/scans", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    delete process.env.SCAN_ADMIN_TOKEN;
     mocks.readScanHistory.mockResolvedValue([
       {
         savedAt: "2026-07-02T00:00:00.000Z",
