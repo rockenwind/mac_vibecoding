@@ -129,6 +129,38 @@ h3 {
   margin: 28px 0 20px;
 }
 
+.admin-token-panel {
+  align-items: end;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto minmax(220px, 320px);
+  margin: 20px 0 0;
+  padding: 14px;
+}
+
+.admin-token-panel p {
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+  margin: 4px 0 0;
+}
+
+.admin-token-panel label {
+  font-weight: 700;
+  padding-bottom: 12px;
+}
+
+.admin-token-panel input {
+  background: #ffffff;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  color: var(--text);
+  min-width: 0;
+  padding: 0 12px;
+}
+
 .scan-form label {
   display: inline-block;
   font-weight: 700;
@@ -841,6 +873,15 @@ pre {
   .panel-heading {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .admin-token-panel {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .admin-token-panel label {
+    padding-bottom: 0;
   }
 
   .picker-grid {

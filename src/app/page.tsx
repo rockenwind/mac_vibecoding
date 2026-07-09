@@ -45,6 +45,8 @@ const categoryLabels: Record<Finding["category"], string> = {
   "dangerous-execution": "위험한 명령 실행"
 };
 
+const adminTokenStorageKey = "repositoryScanAdminToken";
+
 type ScanResponse = {
   scan?: ScanResult;
   history?: ScanHistoryEntry;
@@ -208,6 +210,14 @@ function highestRiskFinding(findings: Finding[]): Finding | undefined {
   })[0];
 }
 
+function readStoredAdminToken(): string {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  return window.localStorage.getItem(adminTokenStorageKey) ?? "";
+}
+
 export default function Home() {
   const [repositoryUrl, setRepositoryUrl] = useState("");
   const [installationId, setInstallationId] = useState("");
@@ -246,6 +256,7 @@ export default function Home() {
   const [scheduleRunResults, setScheduleRunResults] = useState<ScheduleRunResult[]>([]);
   const [isUpdatingSchedule, setIsUpdatingSchedule] = useState(false);
   const [isRunningSchedules, setIsRunningSchedules] = useState(false);
+  const [adminToken, setAdminToken] = useState(readStoredAdminToken);
 
   const suppressedFingerprints = useMemo(
     () => new Set((comparison?.suppressedFindings ?? []).map((finding) => findingFingerprint(finding))),
@@ -405,13 +416,34 @@ export default function Home() {
     }
   }
 
+  function handleAdminTokenChange(nextToken: string) {
+    setAdminToken(nextToken);
+
+    if (nextToken.trim()) {
+      window.localStorage.setItem(adminTokenStorageKey, nextToken);
+    } else {
+      window.localStorage.removeItem(adminTokenStorageKey);
+    }
+  }
+
+  function protectedHeaders(extraHeaders: HeadersInit = {}): HeadersInit {
+    const headers = { ...extraHeaders } as Record<string, string>;
+    const token = adminToken.trim();
+
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    return headers;
+  }
+
   async function updateScanSettings(payload: Record<string, unknown>) {
     setIsUpdatingSettings(true);
     setSettingsError(null);
     try {
       const response = await fetch("/api/scans/settings", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: protectedHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(payload)
       });
       const data = (await response.json()) as ScanSettingsResponse;
@@ -514,7 +546,7 @@ export default function Home() {
       nextRunAt.setUTCDate(nextRunAt.getUTCDate() + intervalDays);
       const response = await fetch("/api/scans/schedules", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: protectedHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           repositoryUrl,
           ...(installationId.trim() ? { installationId: Number(installationId) } : {}),
@@ -547,7 +579,8 @@ export default function Home() {
 
     try {
       const response = await fetch(`/api/scans/schedules?repositoryKey=${encodeURIComponent(repositoryKey)}`, {
-        method: "DELETE"
+        method: "DELETE",
+        headers: protectedHeaders()
       });
       const data = (await response.json()) as ScanSchedulesResponse;
       if (!response.ok || !data.schedules) {
@@ -606,7 +639,7 @@ export default function Home() {
       setScanProgress("파일 가져오는 중 / Fetching files");
       const response = await fetch("/api/scans", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: protectedHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           repositoryUrl,
           ...(installationId.trim() ? { installationId: Number(installationId) } : {})
@@ -659,7 +692,7 @@ export default function Home() {
     try {
       const response = await fetch(`/api/scans/${encodeURIComponent(scan.id)}/github-issue`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: protectedHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ installationId: Number(installationId) })
       });
       const data = (await response.json()) as { issue?: { url?: string }; error?: string };
@@ -714,7 +747,8 @@ export default function Home() {
 
     try {
       const response = await fetch(`/api/scans/${encodeURIComponent(scanId)}`, {
-        method: "DELETE"
+        method: "DELETE",
+        headers: protectedHeaders()
       });
       const data = (await response.json()) as DeleteScanResponse;
 
@@ -749,6 +783,22 @@ export default function Home() {
           </div>
           <p className="workspace-note">공개 저장소 또는 GitHub App 접근 / Public repositories or GitHub App access</p>
         </header>
+
+        <section className="admin-token-panel" aria-labelledby="admin-token-title">
+          <div>
+            <h2 id="admin-token-title">관리자 접근 / Admin access</h2>
+            <p>변경 요청 보호 / Protected mutation requests</p>
+          </div>
+          <label htmlFor="admin-token">관리자 토큰 / Admin token</label>
+          <input
+            autoComplete="off"
+            id="admin-token"
+            onChange={(event) => handleAdminTokenChange(event.target.value)}
+            placeholder="SCAN_ADMIN_TOKEN"
+            type="password"
+            value={adminToken}
+          />
+        </section>
 
         <form className="scan-form" onSubmit={handleSubmit}>
           <label htmlFor="repository-url">GitHub repository URL</label>

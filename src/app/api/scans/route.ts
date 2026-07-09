@@ -1,3 +1,4 @@
+import { requireAdminToken } from "@/lib/api/adminAuth";
 import { readScanHistory } from "@/lib/scanHistory/store";
 import { runRepositoryScan, scanErrorResponse } from "@/lib/scans/runRepositoryScan";
 
@@ -12,6 +13,11 @@ export async function GET(): Promise<Response> {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  const unauthorized = requireAdminToken(request);
+  if (unauthorized) {
+    return unauthorized;
+  }
+
   try {
     const body = (await request.json()) as { repositoryUrl?: unknown; installationId?: unknown };
 

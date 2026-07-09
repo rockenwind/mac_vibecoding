@@ -18,6 +18,7 @@ vi.mock("@/lib/scanSettings/store", () => ({
 describe("/api/scans/schedules", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    delete process.env.SCAN_ADMIN_TOKEN;
     mocks.readScanSettings.mockResolvedValue({
       baselines: [],
       suppressions: [],
@@ -87,6 +88,45 @@ describe("/api/scans/schedules", () => {
     );
   });
 
+  it("requires an admin bearer token before upserting a scheduled scan when configured", async () => {
+    process.env.SCAN_ADMIN_TOKEN = "admin-token";
+
+    const response = await POST(
+      new Request("http://localhost/api/scans/schedules", {
+        method: "POST",
+        body: JSON.stringify({
+          repositoryUrl: "https://github.com/example/repo",
+          enabled: true,
+          intervalDays: 7
+        })
+      })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body.error).toBe("Admin token is required.");
+    expect(mocks.upsertScanSchedule).not.toHaveBeenCalled();
+  });
+
+  it("accepts the configured admin bearer token when upserting a scheduled scan", async () => {
+    process.env.SCAN_ADMIN_TOKEN = "admin-token";
+
+    const response = await POST(
+      new Request("http://localhost/api/scans/schedules", {
+        method: "POST",
+        headers: { Authorization: "Bearer admin-token" },
+        body: JSON.stringify({
+          repositoryUrl: "https://github.com/example/repo",
+          enabled: true,
+          intervalDays: 7
+        })
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.upsertScanSchedule).toHaveBeenCalled();
+  });
+
   it("deletes a scheduled scan by repository key", async () => {
     const response = await DELETE(
       new Request("http://localhost/api/scans/schedules?repositoryKey=example%2Frepo")
@@ -94,5 +134,16 @@ describe("/api/scans/schedules", () => {
 
     expect(response.status).toBe(200);
     expect(mocks.deleteScanSchedule).toHaveBeenCalledWith("example/repo");
+  });
+
+  it("requires an admin bearer token before deleting a scheduled scan when configured", async () => {
+    process.env.SCAN_ADMIN_TOKEN = "admin-token";
+
+    const response = await DELETE(
+      new Request("http://localhost/api/scans/schedules?repositoryKey=example%2Frepo")
+    );
+
+    expect(response.status).toBe(401);
+    expect(mocks.deleteScanSchedule).not.toHaveBeenCalled();
   });
 });

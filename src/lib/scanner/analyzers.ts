@@ -85,7 +85,7 @@ const mcpBroadRootPattern = /"roots"\s*:\s*\[\s*"\/"\s*\]/i;
 const apiRoutePathPattern = /(^|\/)api\/.*\/route\.(?:ts|tsx|js|jsx)$/i;
 const apiMutationHandlerPattern = /\b(?:export\s+async\s+function\s+)?(?:POST|PUT|PATCH|DELETE)\b/;
 const authReviewPattern =
-  /\b(getServerSession|requireAuth|requireUser|verifyToken|validateToken|currentUser|auth\s*\(|authorize\s*\(|isAuthenticated|session\s*=|session\s*\.)\b/i;
+  /\b(getServerSession|requireAuth|requireUser|requireAdminToken|verifyToken|validateToken|currentUser|auth\s*\(|authorize\s*\(|isAuthenticated|session\s*=|session\s*\.)\b/i;
 const adminPathPattern = /(^|\/)admin(\/|$)/i;
 const authorizationReviewPattern =
   /\b(authorize\s*\(|requireRole|requireAdmin|hasPermission|canManage|isAdmin|role\s*===|permissions?\.includes|rbac|policy\.enforce)\b/i;
@@ -265,7 +265,22 @@ function isEnvironmentFile(path: string): boolean {
   const normalized = path.replaceAll("\\", "/");
   const fileName = (normalized.split("/").at(-1) ?? normalized).toLowerCase();
 
+  if (isEnvironmentTemplateFile(fileName)) {
+    return false;
+  }
+
   return fileName === ".env" || fileName.startsWith(".env.");
+}
+
+function isEnvironmentTemplateFile(fileName: string): boolean {
+  return (
+    fileName === ".env.example" ||
+    fileName === ".env.sample" ||
+    fileName === ".env.template" ||
+    fileName.endsWith(".env.example") ||
+    fileName.endsWith(".env.sample") ||
+    fileName.endsWith(".env.template")
+  );
 }
 
 function hasBroadFilesystemShellMcpRisk(content: string): boolean {
@@ -273,11 +288,34 @@ function hasBroadFilesystemShellMcpRisk(content: string): boolean {
 }
 
 function matchesRule(rule: RuleMatch, file: RepositoryFile, line: string): boolean {
+  if (isExampleOnlyPath(file.path)) {
+    return false;
+  }
+
+  if (rule.ruleId === "secret.exposed-token" && isEnvironmentReference(line)) {
+    return false;
+  }
+
   if (rule.filePattern && !rule.filePattern.test(file.path)) {
     return false;
   }
 
   return rule.pattern.test(line);
+}
+
+function isEnvironmentReference(line: string): boolean {
+  return /\bprocess\.env\.[A-Z0-9_]+\b/.test(line) && !/[A-Z0-9_]+\s*[:=]\s*["'][^"']{16,}["']/.test(line);
+}
+
+function isExampleOnlyPath(path: string): boolean {
+  const normalized = path.replaceAll("\\", "/").toLowerCase();
+  const fileName = normalized.split("/").at(-1) ?? normalized;
+
+  return (
+    normalized.startsWith("docs/superpowers/") ||
+    normalized.includes("/__fixtures__/") ||
+    /\.(?:test|spec)\.(?:ts|tsx|js|jsx|py)$/.test(fileName)
+  );
 }
 
 function isApiRouteMissingAuthReview(file: RepositoryFile): boolean {

@@ -4,6 +4,7 @@ import Home from "./page";
 
 describe("Home", () => {
   beforeEach(() => {
+    localStorage.clear();
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -458,6 +459,30 @@ describe("Home", () => {
         })
       );
     });
+  });
+
+  it("sends the saved admin token with protected mutation requests", async () => {
+    const fetchMock = vi.mocked(fetch);
+    render(<Home />);
+
+    fireEvent.change(screen.getByLabelText("관리자 토큰 / Admin token"), {
+      target: { value: "admin-token" }
+    });
+    fireEvent.change(screen.getByLabelText("GitHub repository URL"), {
+      target: { value: "https://github.com/example/repo" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Scan repository" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/scans",
+        expect.objectContaining({
+          method: "POST",
+          headers: expect.objectContaining({ Authorization: "Bearer admin-token" })
+        })
+      );
+    });
+    expect(localStorage.getItem("repositoryScanAdminToken")).toBe("admin-token");
   });
 
   it("renders scheduled scans and can save and run a schedule", async () => {
