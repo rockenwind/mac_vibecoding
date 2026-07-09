@@ -147,23 +147,23 @@ flowchart TD
 - 오탐 처리된 항목
 - 알림 후보 메시지
 
-운영 환경에서는 Render Cron으로 `run-due` API를 주기 호출합니다. 이 API는 `SCHEDULE_RUN_TOKEN`이 설정되어 있으면 `Authorization` 헤더의 Bearer 토큰이 일치할 때만 실행됩니다.
+운영 환경에서는 GitHub Actions schedule로 `run-due` API를 주기 호출합니다. 이 API는 `SCHEDULE_RUN_TOKEN`이 설정되어 있으면 `Authorization` 헤더의 Bearer 토큰이 일치할 때만 실행됩니다.
 
-Render 웹 서비스 환경 변수에 다음 값을 추가합니다.
+Render 웹 서비스 환경 변수와 GitHub repository secret에 같은 값을 추가합니다.
 
 ```text
 SCHEDULE_RUN_TOKEN=충분히-긴-무작위-문자열
 ```
 
-Render Cron Job은 다음 요청을 실행하도록 설정합니다.
+GitHub Actions 워크플로는 다음 파일에 있습니다.
 
-```bash
-bash scripts/run-scheduled-scans-cron.sh
+```text
+.github/workflows/repository-scan-scheduled-runner.yml
 ```
 
-권장 주기는 1시간입니다. 스캔 실행 여부는 각 저장소의 `nextRunAt`으로 다시 판단하므로, Cron이 자주 호출되어도 실행 시간이 지난 예약만 스캔합니다.
+권장 주기는 1시간입니다. 스캔 실행 여부는 각 저장소의 `nextRunAt`으로 다시 판단하므로, 워크플로가 자주 호출되어도 실행 시간이 지난 예약만 스캔합니다.
 
-자세한 Render Cron 설정 절차는 `docs/render-cron-scheduled-scans.md`를 참고합니다.
+자세한 GitHub Actions 설정 절차는 `docs/github-actions-scheduled-scans.md`를 참고합니다.
 
 ## 스캔 이력 저장
 

@@ -1,0 +1,44 @@
+name: Repository scan scheduled runner
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  run-due-scheduled-scans:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      APP_URL: https://repository-scan.onrender.com
+      SCHEDULE_RUN_TOKEN: ${{ secrets.SCHEDULE_RUN_TOKEN }}
+    steps:
+      - name: Trigger due scheduled scans
+        run: |
+          if [ -z "${SCHEDULE_RUN_TOKEN}" ]; then
+            echo "SCHEDULE_RUN_TOKEN repository secret is required." >&2
+            exit 2
+          fi
+
+          response_file="$(mktemp)"
+          status_code="$(
+            curl --silent --show-error \
+              --output "${response_file}" \
+              --write-out "%{http_code}" \
+              --request POST \
+              --header "Authorization: Bearer ${SCHEDULE_RUN_TOKEN}" \
+              --header "Content-Type: application/json" \
+              --data '{}' \
+              "${APP_URL%/}/api/scans/schedules/run-due"
+          )"
+
+          cat "${response_file}"
+          echo
+
+          if [ "${status_code}" -lt 200 ] || [ "${status_code}" -ge 300 ]; then
+            echo "Scheduled scan trigger failed with HTTP ${status_code}." >&2
+            exit 1
+          fi
