@@ -39,7 +39,7 @@ const rules: RuleMatch[] = [
     severity: "high",
     confidence: "medium",
     category: "dangerous-execution",
-    pattern: /\b(child_process\.exec|exec\(|subprocess\.|os\.system|new Function\(|eval\()/,
+    pattern: /\b(child_process\.exec|(?<!\.)\bexec\(|subprocess\.|os\.system|new Function\(|eval\()/,
     whyItMatters: "Agent or LLM-controlled command execution can become remote code execution if user input reaches this path.",
     fixSuggestion:
       "Constrain commands to an allowlist, avoid shell interpolation, and separate user input from executable arguments."
@@ -85,7 +85,7 @@ const mcpBroadRootPattern = /"roots"\s*:\s*\[\s*"\/"\s*\]/i;
 const apiRoutePathPattern = /(^|\/)api\/.*\/route\.(?:ts|tsx|js|jsx)$/i;
 const apiMutationHandlerPattern = /\b(?:export\s+async\s+function\s+)?(?:POST|PUT|PATCH|DELETE)\b/;
 const authReviewPattern =
-  /\b(getServerSession|requireAuth|requireUser|requireAdminToken|verifyToken|validateToken|currentUser|auth\s*\(|authorize\s*\(|isAuthenticated|session\s*=|session\s*\.)\b/i;
+  /\b(getServerSession|requireAuth|requireUser|requireAdminToken|authorizeScheduledRun|verifyToken|validateToken|currentUser|auth\s*\(|authorize\s*\(|isAuthenticated|session\s*=|session\s*\.)\b/i;
 const adminPathPattern = /(^|\/)admin(\/|$)/i;
 const authorizationReviewPattern =
   /\b(authorize\s*\(|requireRole|requireAdmin|hasPermission|canManage|isAdmin|role\s*===|permissions?\.includes|rbac|policy\.enforce)\b/i;
@@ -292,6 +292,10 @@ function matchesRule(rule: RuleMatch, file: RepositoryFile, line: string): boole
     return false;
   }
 
+  if (isRuleDefinitionSelfMatch(rule, file.path)) {
+    return false;
+  }
+
   if (rule.ruleId === "secret.exposed-token" && isEnvironmentReference(line)) {
     return false;
   }
@@ -301,6 +305,10 @@ function matchesRule(rule: RuleMatch, file: RepositoryFile, line: string): boole
   }
 
   return rule.pattern.test(line);
+}
+
+function isRuleDefinitionSelfMatch(rule: RuleMatch, path: string): boolean {
+  return rule.ruleId === "prompt-injection.reveal-system-prompt" && path.replaceAll("\\", "/") === "src/lib/scanner/analyzers.ts";
 }
 
 function isEnvironmentReference(line: string): boolean {
