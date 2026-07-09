@@ -207,7 +207,8 @@ describe("analyzeFiles", () => {
       {
         path: ".env.example",
         size: 72,
-        content: "SCHEDULE_RUN_TOKEN=replace-me-with-a-random-token\n"
+        content:
+          "SCHEDULE_RUN_TOKEN=replace-with-long-random-token\nSCAN_ADMIN_TOKEN=replace-with-long-random-admin-token\n"
       }
     ]);
 
@@ -259,6 +260,55 @@ describe("analyzeFiles", () => {
     ]);
 
     expect(findings.map((finding) => finding.ruleId)).not.toContain("api.missing-auth-review");
+  });
+
+  it("treats the scheduled run token guard as authentication review coverage", () => {
+    const findings = analyzeFiles([
+      {
+        path: "src/app/api/scans/schedules/run-due/route.ts",
+        size: 220,
+        content:
+          "export async function POST(request: Request) {\n  const authError = authorizeScheduledRun(request);\n  if (authError) return authError;\n  return Response.json({ ok: true });\n}\n"
+      }
+    ]);
+
+    expect(findings.map((finding) => finding.ruleId)).not.toContain("api.missing-auth-review");
+  });
+
+  it("does not flag local storage key constants as exposed secret values", () => {
+    const findings = analyzeFiles([
+      {
+        path: "src/app/page.tsx",
+        size: 120,
+        content: 'const adminStorageKey = "repositoryScanAdminAccess";\n'
+      }
+    ]);
+
+    expect(findings.map((finding) => finding.ruleId)).not.toContain("secret.exposed-token");
+  });
+
+  it("does not treat SQLite exec helpers as shell execution", () => {
+    const findings = analyzeFiles([
+      {
+        path: "src/lib/scanHistory/store.ts",
+        size: 120,
+        content: "database.exec(`CREATE TABLE scan_history (id TEXT PRIMARY KEY);`);\n"
+      }
+    ]);
+
+    expect(findings.map((finding) => finding.ruleId)).not.toContain("dangerous-execution.child-process");
+  });
+
+  it("does not flag analyzer rule definitions as prompt-injection vulnerabilities", () => {
+    const findings = analyzeFiles([
+      {
+        path: "src/lib/scanner/analyzers.ts",
+        size: 160,
+        content: 'pattern: /(reveal|print|show).{0,40}(system prompt|hidden instruction|developer message)/i,\n'
+      }
+    ]);
+
+    expect(findings.map((finding) => finding.ruleId)).not.toContain("prompt-injection.reveal-system-prompt");
   });
 
   it("does not flag MCP configs with only shell access or only broad filesystem access", () => {
