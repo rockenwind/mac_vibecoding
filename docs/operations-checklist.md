@@ -23,6 +23,13 @@ Repository scan은 GitHub 코드 보안 점검 서비스다.
 - `SCAN_HISTORY_DATABASE_URL`이 있으면 `SCAN_HISTORY_FILE`보다 우선한다.
 - 운영 배포에서는 Render 인스턴스 로컬 파일 대신 Postgres 또는 Neon을 사용한다.
 
+### 예약 실행 점검
+
+- Render Web Service에 `SCHEDULE_RUN_TOKEN` 환경 변수가 있어야 한다.
+- GitHub repository secret에도 같은 `SCHEDULE_RUN_TOKEN`이 있어야 한다.
+- `.github/workflows/repository-scan-scheduled-runner.yml`이 1시간마다 `run-due` API를 호출한다.
+- GitHub Actions의 `Repository scan scheduled runner` 워크플로에서 수동 실행으로도 확인할 수 있다.
+
 ### 배포 전 점검
 
 ```bash

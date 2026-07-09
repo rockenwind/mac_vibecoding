@@ -2,6 +2,8 @@
 
 Repository scan 서비스는 예약 스캔 실행 API를 제공합니다. Render Cron은 이 API를 주기적으로 호출해 실행 시간이 지난 저장소만 점검합니다.
 
+> 현재 권장 방식은 GitHub Actions schedule입니다. Render Cron Job은 서비스당 최소 월 비용이 있으므로 비용을 피하려면 `docs/github-actions-scheduled-scans.md`를 사용합니다.
+
 ## 전제 조건
 
 - Repository scan 웹 서비스가 Render에 배포되어 있어야 합니다.
