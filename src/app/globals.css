@@ -375,6 +375,11 @@ h3 {
   font-weight: 700;
 }
 
+.history-scan-date {
+  color: var(--muted);
+  font-weight: 700;
+}
+
 .saved-scan-note {
   background: #f2f4f7;
   border: 1px solid var(--line);
@@ -672,6 +677,130 @@ h3 {
 .risk-summary-grid strong {
   font-size: 1.45rem;
   line-height: 1;
+}
+
+.scan-coverage {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+  padding-top: 16px;
+}
+
+.scan-coverage-heading {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.scan-coverage-heading span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.coverage-summary {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.coverage-summary div {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  display: grid;
+  gap: 5px;
+  padding: 10px;
+}
+
+.coverage-summary span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.coverage-summary strong {
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.coverage-list {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.coverage-item {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.coverage-title-row {
+  align-items: flex-start;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.coverage-title-row strong {
+  font-size: 0.9rem;
+  line-height: 1.3;
+  text-align: right;
+}
+
+.coverage-status {
+  border-radius: 999px;
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+  padding: 6px 8px;
+}
+
+.coverage-status-failed {
+  background: rgba(182, 36, 45, 0.1);
+  color: var(--critical);
+}
+
+.coverage-status-passed {
+  background: rgba(31, 122, 75, 0.12);
+  color: #1f7a4b;
+}
+
+.coverage-status-disabled {
+  background: #eef0f3;
+  color: var(--muted);
+}
+
+.coverage-item p {
+  color: var(--text);
+  font-size: 0.86rem;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.coverage-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.coverage-meta span {
+  background: #f7f8fa;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 6px 8px;
 }
 
 .comparison-grid {
