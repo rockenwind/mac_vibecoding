@@ -13,8 +13,7 @@ export type ScanHistoryStore = {
 
 export type ScanComparison = {
   previousScanId: string | null;
-  baselineScanId?: string | null;
-  comparisonSource?: "previous" | "baseline" | "none";
+  comparisonSource?: "previous" | "none";
   newFindings: Finding[];
   resolvedFindings: Finding[];
   unchangedFindings: Finding[];

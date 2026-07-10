@@ -44,15 +44,11 @@ describe("Home", () => {
         }
         if (url === "/api/scans/settings") {
           if (init?.method === "PATCH") {
-            const payload = JSON.parse(String(init.body ?? "{}")) as { action?: string; ruleId?: string; enabled?: boolean; repositoryKey?: string; scanId?: string };
+            const payload = JSON.parse(String(init.body ?? "{}")) as { action?: string; ruleId?: string; enabled?: boolean };
             return {
               ok: true,
               json: async () => ({
                 settings: {
-                  baselines:
-                    payload.action === "setBaseline"
-                      ? [{ repositoryKey: payload.repositoryKey, scanId: payload.scanId, updatedAt: "2026-07-02T00:10:00.000Z" }]
-                      : [],
                   suppressions: [],
                   rules:
                     payload.action === "setRuleEnabled" && payload.ruleId
@@ -65,14 +61,26 @@ describe("Home", () => {
                     title: "Possible exposed credential",
                     severity: "critical",
                     category: "secret",
-                    description: "API 키, 토큰, 비밀번호처럼 코드에 직접 들어간 비밀값을 찾습니다."
+                    description: "API 키, 토큰, 비밀번호처럼 코드에 직접 들어간 비밀값을 찾습니다.",
+                    sourcePath: "src/lib/scanner/analyzers.ts",
+                    detectionType: "정규식 기반",
+                    detectionSummary: "API 키와 긴 비밀값 형태를 찾습니다.",
+                    impact: "노출된 비밀값은 무단 접근으로 이어질 수 있습니다.",
+                    remediation: "노출된 값을 폐기하고 비밀 관리 도구로 옮기세요.",
+                    limitations: "오탐 가능성이 있습니다."
                   },
                   {
                     ruleId: "network.user-controlled-request",
                     title: "Outbound request uses user-controlled URL",
                     severity: "medium",
                     category: "dangerous-execution",
-                    description: "사용자 입력이 서버의 외부 요청 주소로 사용되는지 확인합니다."
+                    description: "사용자 입력이 서버의 외부 요청 주소로 사용되는지 확인합니다.",
+                    sourcePath: "src/lib/scanner/analyzers.ts",
+                    detectionType: "정규식 기반",
+                    detectionSummary: "요청 객체 값이 fetch 주소로 사용되는지 찾습니다.",
+                    impact: "서버 측 요청 위조 위험이 생길 수 있습니다.",
+                    remediation: "요청 대상 도메인을 allowlist로 검증하세요.",
+                    limitations: "별도 검증 함수가 있으면 수동 확인이 필요합니다."
                   }
                 ]
               })
@@ -81,21 +89,33 @@ describe("Home", () => {
           return {
             ok: true,
             json: async () => ({
-              settings: { baselines: [], suppressions: [], rules: [] },
+              settings: { suppressions: [], rules: [] },
                 rules: [
                   {
                     ruleId: "secret.exposed-token",
                     title: "Possible exposed credential",
                     severity: "critical",
                     category: "secret",
-                    description: "API 키, 토큰, 비밀번호처럼 코드에 직접 들어간 비밀값을 찾습니다."
+                    description: "API 키, 토큰, 비밀번호처럼 코드에 직접 들어간 비밀값을 찾습니다.",
+                    sourcePath: "src/lib/scanner/analyzers.ts",
+                    detectionType: "정규식 기반",
+                    detectionSummary: "API 키와 긴 비밀값 형태를 찾습니다.",
+                    impact: "노출된 비밀값은 무단 접근으로 이어질 수 있습니다.",
+                    remediation: "노출된 값을 폐기하고 비밀 관리 도구로 옮기세요.",
+                    limitations: "오탐 가능성이 있습니다."
                   },
                   {
                     ruleId: "network.user-controlled-request",
                     title: "Outbound request uses user-controlled URL",
                     severity: "medium",
                     category: "dangerous-execution",
-                    description: "사용자 입력이 서버의 외부 요청 주소로 사용되는지 확인합니다."
+                    description: "사용자 입력이 서버의 외부 요청 주소로 사용되는지 확인합니다.",
+                    sourcePath: "src/lib/scanner/analyzers.ts",
+                    detectionType: "정규식 기반",
+                    detectionSummary: "요청 객체 값이 fetch 주소로 사용되는지 찾습니다.",
+                    impact: "서버 측 요청 위조 위험이 생길 수 있습니다.",
+                    remediation: "요청 대상 도메인을 allowlist로 검증하세요.",
+                    limitations: "별도 검증 함수가 있으면 수동 확인이 필요합니다."
                   }
                 ]
               })
@@ -321,7 +341,76 @@ describe("Home", () => {
                     },
                     summary: { critical: 1, high: 0, medium: 0, low: 0, info: 0 },
                     warnings: [],
+                    checks: [
+                      {
+                        ruleId: "secret.exposed-token",
+                        title: "Possible exposed credential",
+                        severity: "critical",
+                        category: "secret",
+                        description: "API 키, 토큰, 비밀번호처럼 코드에 직접 들어간 비밀값을 찾습니다.",
+                        status: "passed",
+                        findingCount: 0
+                      },
+                      {
+                        ruleId: "prompt-injection.reveal-system-prompt",
+                        title: "Prompt invites system prompt disclosure",
+                        severity: "medium",
+                        category: "prompt-injection",
+                        description: "숨겨진 시스템 프롬프트 노출 문구를 찾습니다.",
+                        status: "failed",
+                        findingCount: 1
+                      }
+                    ],
                     findings: []
+                  }
+                },
+                {
+                  savedAt: "2026-07-03T00:00:00.000Z",
+                  scan: {
+                    id: "scan_current",
+                    repository: {
+                      owner: "example",
+                      name: "repo",
+                      url: "https://github.com/example/repo",
+                      defaultBranch: "main"
+                    },
+                    summary: { critical: 1, high: 0, medium: 0, low: 0, info: 0 },
+                    warnings: [],
+                    checks: [
+                      {
+                        ruleId: "secret.exposed-token",
+                        title: "Possible exposed credential",
+                        severity: "critical",
+                        category: "secret",
+                        description: "API 키, 토큰, 비밀번호처럼 코드에 직접 들어간 비밀값을 찾습니다.",
+                        status: "failed",
+                        findingCount: 1
+                      },
+                      {
+                        ruleId: "network.user-controlled-request",
+                        title: "Outbound request uses user-controlled URL",
+                        severity: "medium",
+                        category: "dangerous-execution",
+                        description: "사용자 입력이 서버의 외부 요청 주소로 사용되는지 확인합니다.",
+                        status: "passed",
+                        findingCount: 0
+                      }
+                    ],
+                    findings: [
+                      {
+                        id: "secret.exposed-token:.env:1",
+                        ruleId: "secret.exposed-token",
+                        title: "Possible exposed credential",
+                        severity: "critical",
+                        confidence: "high",
+                        category: "secret",
+                        filePath: ".env",
+                        lineStart: 1,
+                        evidence: "OPENAI_API_KEY=sk-...",
+                        whyItMatters: "Exposed credentials can let attackers access services.",
+                        fixSuggestion: "Revoke the credential and load it from a secret manager."
+                      }
+                    ]
                   }
                 },
                 {
@@ -467,7 +556,10 @@ describe("Home", () => {
     expect(screen.getAllByText("발견 / Findings").length).toBeGreaterThan(0);
     expect(screen.getAllByText("통과 / Passed").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Outbound request uses user-controlled URL").length).toBeGreaterThan(0);
-    expect(screen.getByText("사용자 입력이 서버의 외부 요청 주소로 사용되는지 확인합니다.")).toBeInTheDocument();
+    expect(screen.getAllByText("사용자 입력이 서버의 외부 요청 주소로 사용되는지 확인합니다.").length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "스캔 규칙과 분석 기준" })).toBeInTheDocument();
+    expect(screen.getAllByText("src/lib/scanner/analyzers.ts").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("정규식 기반").length).toBeGreaterThan(0);
   });
 
   it("renders actionable Korean finding details after a scan", async () => {
@@ -617,22 +709,39 @@ describe("Home", () => {
     expect(screen.getByText("필터 조건에 맞는 저장 스캔이 없습니다. / No saved scans match the filters.")).toBeInTheDocument();
   });
 
-  it("can mark a recent scan as baseline", async () => {
-    const fetchMock = vi.mocked(fetch);
+  it("can compare two saved scans directly", async () => {
     render(<Home />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "기준선 지정 / Set baseline scan_previous" }));
+    fireEvent.click(await screen.findByRole("button", { name: "비교 A 선택 scan_previous" }));
+    fireEvent.click(await screen.findByRole("button", { name: "비교 B 선택 scan_current" }));
 
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        "/api/scans/settings",
-        expect.objectContaining({
-          method: "PATCH",
-          body: expect.stringContaining("setBaseline")
-        })
-      );
-    });
-    expect(await screen.findByRole("button", { name: "기준선 지정 / Set baseline scan_previous" })).toBeDisabled();
+    expect(await screen.findByRole("heading", { name: "스캔 결과 직접 비교" })).toBeInTheDocument();
+    expect(screen.getAllByText("새로 발견").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("해결됨").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("계속 남음").length).toBeGreaterThan(0);
+    expect(screen.getByText("검사 항목 변화")).toBeInTheDocument();
+    expect(screen.getAllByText(/발견 \/ Findings/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/없음 \/ Missing/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Possible exposed credential").length).toBeGreaterThan(0);
+  });
+
+  it("normalizes reversed saved scan comparison by saved time", async () => {
+    render(<Home />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "비교 A 선택 scan_current" }));
+    fireEvent.click(await screen.findByRole("button", { name: "비교 B 선택 scan_previous" }));
+
+    expect(await screen.findByText(/비교 A \/ Scan A: scan_previous/)).toBeInTheDocument();
+    expect(screen.getByText(/비교 B \/ Scan B: scan_current/)).toBeInTheDocument();
+  });
+
+  it("rejects comparing the same saved scan twice", async () => {
+    render(<Home />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "비교 A 선택 scan_previous" }));
+    fireEvent.click(await screen.findByRole("button", { name: "비교 B 선택 scan_previous" }));
+
+    expect(await screen.findByText(/서로 다른 스캔 결과 2개를 선택하세요/)).toBeInTheDocument();
   });
 
   it("opens a saved scan from recent history with details and comparison", async () => {
@@ -708,7 +817,7 @@ describe("Home", () => {
           return { ok: true, json: async () => ({ installations: [] }) };
         }
         if (url === "/api/scans/settings") {
-          return { ok: true, json: async () => ({ settings: { baselines: [], suppressions: [], rules: [] }, rules: [] }) };
+          return { ok: true, json: async () => ({ settings: { suppressions: [], rules: [] }, rules: [] }) };
         }
         if (url === "/api/scans" && !init) {
           return { ok: true, json: async () => ({ history: [] }) };
@@ -933,7 +1042,6 @@ describe("Home", () => {
           },
           comparison: {
             previousScanId: null,
-            baselineScanId: null,
             comparisonSource: "none",
             newFindings: [],
             resolvedFindings: [],

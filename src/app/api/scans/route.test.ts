@@ -10,9 +10,7 @@ const mocks = vi.hoisted(() => ({
   readScanSettings: vi.fn(),
   disabledRuleIds: vi.fn(),
   repositoryKey: vi.fn(),
-  baselineScanIdForRepository: vi.fn(),
   suppressedFingerprintsForRepository: vi.fn(),
-  findScanById: vi.fn(),
   readGitHubAppConfig: vi.fn(),
   createGitHubAppJwt: vi.fn(),
   createInstallationAccessToken: vi.fn()
@@ -26,15 +24,13 @@ vi.mock("@/lib/scanHistory/store", () => ({
   readScanHistory: mocks.readScanHistory,
   recordScan: mocks.recordScan,
   findPreviousScan: mocks.findPreviousScan,
-  compareScanResults: mocks.compareScanResults,
-  findScanById: mocks.findScanById
+  compareScanResults: mocks.compareScanResults
 }));
 
 vi.mock("@/lib/scanSettings/store", () => ({
   readScanSettings: mocks.readScanSettings,
   disabledRuleIds: mocks.disabledRuleIds,
   repositoryKey: mocks.repositoryKey,
-  baselineScanIdForRepository: mocks.baselineScanIdForRepository,
   suppressedFingerprintsForRepository: mocks.suppressedFingerprintsForRepository
 }));
 
@@ -73,10 +69,8 @@ describe("POST /api/scans", () => {
     mocks.readScanHistory.mockResolvedValue([]);
     mocks.recordScan.mockImplementation(async (scan) => ({ savedAt: "2026-07-02T00:00:00.000Z", scan }));
     mocks.findPreviousScan.mockReturnValue(null);
-    mocks.findScanById.mockReturnValue(null);
     mocks.compareScanResults.mockImplementation((scan) => ({
       previousScanId: null,
-      baselineScanId: null,
       comparisonSource: "none",
       newFindings: scan.findings,
       resolvedFindings: [],
@@ -86,7 +80,6 @@ describe("POST /api/scans", () => {
     mocks.readScanSettings.mockResolvedValue({ baselines: [], suppressions: [], rules: [] });
     mocks.disabledRuleIds.mockReturnValue([]);
     mocks.repositoryKey.mockReturnValue("example/repo");
-    mocks.baselineScanIdForRepository.mockReturnValue(null);
     mocks.suppressedFingerprintsForRepository.mockReturnValue([]);
     mocks.readGitHubAppConfig.mockReturnValue({
       configured: true,
@@ -190,12 +183,11 @@ describe("POST /api/scans", () => {
     );
   });
 
-  it("applies rule settings and baseline comparison when scanning", async () => {
+  it("applies rule settings and previous scan comparison when scanning", async () => {
     mocks.disabledRuleIds.mockReturnValue(["secret.exposed-token"]);
-    mocks.baselineScanIdForRepository.mockReturnValue("scan_baseline");
-    mocks.findScanById.mockReturnValue({
+    mocks.findPreviousScan.mockReturnValue({
       savedAt: "2026-07-01T00:00:00.000Z",
-      scan: { id: "scan_baseline", repository: { owner: "example", name: "repo", url: "", defaultBranch: "main" }, summary: { critical: 0, high: 0, medium: 0, low: 0, info: 0 }, warnings: [], findings: [] }
+      scan: { id: "scan_previous", repository: { owner: "example", name: "repo", url: "", defaultBranch: "main" }, summary: { critical: 0, high: 0, medium: 0, low: 0, info: 0 }, warnings: [], findings: [] }
     });
 
     const response = await POST(
@@ -209,10 +201,9 @@ describe("POST /api/scans", () => {
     expect(mocks.disabledRuleIds).toHaveBeenCalled();
     expect(mocks.compareScanResults).toHaveBeenCalledWith(
       expect.any(Object),
-      expect.objectContaining({ scan: expect.objectContaining({ id: "scan_baseline" }) }),
+      expect.objectContaining({ scan: expect.objectContaining({ id: "scan_previous" }) }),
       expect.objectContaining({
-        baselineScanId: "scan_baseline",
-        comparisonSource: "baseline",
+        comparisonSource: "previous",
         suppressedFingerprints: []
       })
     );

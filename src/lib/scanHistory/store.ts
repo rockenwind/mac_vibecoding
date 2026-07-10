@@ -230,8 +230,7 @@ export function compareScanResults(
   currentScan: ScanResult,
   previousEntry: ScanHistoryEntry | null,
   options: {
-    baselineScanId?: string | null;
-    comparisonSource?: "previous" | "baseline" | "none";
+    comparisonSource?: "previous" | "none";
     suppressedFingerprints?: string[];
   } = {}
 ): ScanComparison {
@@ -242,7 +241,6 @@ export function compareScanResults(
   if (!previousEntry) {
     return {
       previousScanId: null,
-      baselineScanId: options.baselineScanId ?? null,
       comparisonSource: options.comparisonSource ?? "none",
       newFindings: currentUnsuppressed,
       resolvedFindings: [],
@@ -261,7 +259,6 @@ export function compareScanResults(
 
   return {
     previousScanId: previousEntry.scan.id,
-    baselineScanId: options.baselineScanId ?? null,
     comparisonSource: options.comparisonSource ?? "previous",
     newFindings: unmatchedCurrent,
     resolvedFindings: unmatchedPrevious,
