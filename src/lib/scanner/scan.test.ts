@@ -65,4 +65,43 @@ describe("runScan", () => {
     );
     expect(scan.summary.critical).toBe(0);
   });
+
+  it("records passed, failed, and disabled analyzer checks", () => {
+    const scan = runScan(
+      {
+        repository: {
+          owner: "example",
+          name: "repo",
+          url: "https://github.com/example/repo",
+          defaultBranch: "main"
+        },
+        files: sampleFiles,
+        warnings: []
+      },
+      { disabledRuleIds: ["prompt-injection.reveal-system-prompt"] }
+    );
+
+    expect(scan.checks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ruleId: "secret.exposed-token",
+          status: "failed",
+          findingCount: expect.any(Number),
+          description: expect.any(String)
+        }),
+        expect.objectContaining({
+          ruleId: "network.user-controlled-request",
+          status: "passed",
+          findingCount: 0,
+          description: expect.any(String)
+        }),
+        expect.objectContaining({
+          ruleId: "prompt-injection.reveal-system-prompt",
+          status: "disabled",
+          findingCount: 0,
+          description: expect.any(String)
+        })
+      ])
+    );
+  });
 });

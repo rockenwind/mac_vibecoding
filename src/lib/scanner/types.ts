@@ -42,10 +42,23 @@ export type ScanWarning = {
   message: string;
 };
 
+export type ScanCheckStatus = "passed" | "failed" | "disabled";
+
+export type ScanCheckResult = {
+  ruleId: string;
+  title: string;
+  severity: Severity;
+  category: FindingCategory;
+  description: string;
+  status: ScanCheckStatus;
+  findingCount: number;
+};
+
 export type ScanResult = {
   id: string;
   repository: Required<RepositoryRef>;
   summary: ScanSummary;
   findings: Finding[];
+  checks?: ScanCheckResult[];
   warnings: ScanWarning[];
 };

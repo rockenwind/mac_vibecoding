@@ -64,7 +64,15 @@ describe("Home", () => {
                     ruleId: "secret.exposed-token",
                     title: "Possible exposed credential",
                     severity: "critical",
-                    category: "secret"
+                    category: "secret",
+                    description: "API 키, 토큰, 비밀번호처럼 코드에 직접 들어간 비밀값을 찾습니다."
+                  },
+                  {
+                    ruleId: "network.user-controlled-request",
+                    title: "Outbound request uses user-controlled URL",
+                    severity: "medium",
+                    category: "dangerous-execution",
+                    description: "사용자 입력이 서버의 외부 요청 주소로 사용되는지 확인합니다."
                   }
                 ]
               })
@@ -74,15 +82,23 @@ describe("Home", () => {
             ok: true,
             json: async () => ({
               settings: { baselines: [], suppressions: [], rules: [] },
-              rules: [
-                {
-                  ruleId: "secret.exposed-token",
-                  title: "Possible exposed credential",
-                  severity: "critical",
-                  category: "secret"
-                }
-              ]
-            })
+                rules: [
+                  {
+                    ruleId: "secret.exposed-token",
+                    title: "Possible exposed credential",
+                    severity: "critical",
+                    category: "secret",
+                    description: "API 키, 토큰, 비밀번호처럼 코드에 직접 들어간 비밀값을 찾습니다."
+                  },
+                  {
+                    ruleId: "network.user-controlled-request",
+                    title: "Outbound request uses user-controlled URL",
+                    severity: "medium",
+                    category: "dangerous-execution",
+                    description: "사용자 입력이 서버의 외부 요청 주소로 사용되는지 확인합니다."
+                  }
+                ]
+              })
           };
         }
         if (url === "/api/scans/schedules") {
@@ -327,6 +343,26 @@ describe("Home", () => {
               },
               summary: { critical: 1, high: 1, medium: 0, low: 0, info: 0 },
               warnings: [],
+              checks: [
+                {
+                  ruleId: "secret.exposed-token",
+                  title: "Possible exposed credential",
+                  severity: "critical",
+                  category: "secret",
+                  description: "API 키, 토큰, 비밀번호처럼 코드에 직접 들어간 비밀값을 찾습니다.",
+                  status: "failed",
+                  findingCount: 1
+                },
+                {
+                  ruleId: "network.user-controlled-request",
+                  title: "Outbound request uses user-controlled URL",
+                  severity: "medium",
+                  category: "dangerous-execution",
+                  description: "사용자 입력이 서버의 외부 요청 주소로 사용되는지 확인합니다.",
+                  status: "passed",
+                  findingCount: 0
+                }
+              ],
               findings: [
                 {
                   id: "secret.exposed-token:.env:1",
@@ -401,6 +437,22 @@ describe("Home", () => {
     });
     expect(screen.getAllByText("Critical").length).toBeGreaterThan(0);
     expect(screen.getAllByText(".env:1").length).toBeGreaterThan(0);
+  });
+
+  it("renders scan time and passed scan coverage details", async () => {
+    render(<Home />);
+
+    fireEvent.change(screen.getByLabelText("GitHub repository URL"), {
+      target: { value: "https://github.com/example/repo" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Scan repository" }));
+
+    expect((await screen.findAllByText(/스캔 일시 \/ Scanned at/)).length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "점검 항목 / Scan coverage" })).toBeInTheDocument();
+    expect(screen.getAllByText("발견 / Findings").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("통과 / Passed").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Outbound request uses user-controlled URL").length).toBeGreaterThan(0);
+    expect(screen.getByText("사용자 입력이 서버의 외부 요청 주소로 사용되는지 확인합니다.")).toBeInTheDocument();
   });
 
   it("renders actionable Korean finding details after a scan", async () => {

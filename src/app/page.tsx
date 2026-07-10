@@ -1,7 +1,15 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import type { Finding, FindingConfidence, ScanResult, ScanSummary, Severity } from "@/lib/scanner/types";
+import type {
+  Finding,
+  FindingConfidence,
+  ScanCheckResult,
+  ScanCheckStatus,
+  ScanResult,
+  ScanSummary,
+  Severity
+} from "@/lib/scanner/types";
 import type { ScanComparison, ScanHistoryEntry } from "@/lib/scanHistory/types";
 import { findingFingerprint } from "@/lib/scanHistory/fingerprint";
 
@@ -45,6 +53,12 @@ const categoryLabels: Record<Finding["category"], string> = {
   "dangerous-execution": "위험한 명령 실행"
 };
 
+const checkStatusLabels: Record<ScanCheckStatus, string> = {
+  failed: "발견 / Findings",
+  passed: "통과 / Passed",
+  disabled: "비활성 / Disabled"
+};
+
 const adminTokenStorageKey = "repositoryScanAdminToken";
 
 type ScanResponse = {
@@ -78,6 +92,7 @@ type AnalyzerRule = {
   title: string;
   severity: Severity;
   category: Finding["category"];
+  description: string;
 };
 
 type ScanSettingsResponse = {
@@ -203,6 +218,33 @@ function summarizeVisibleFindings(findings: Finding[]): ScanSummary {
   );
 }
 
+function scanRuleSettingsById(settings: ScanSettings): Map<string, boolean> {
+  return new Map(settings.rules.map((rule) => [rule.ruleId, rule.enabled]));
+}
+
+function buildFallbackChecks(
+  rules: AnalyzerRule[],
+  findings: Finding[],
+  settings: ScanSettings
+): ScanCheckResult[] {
+  const ruleSettings = scanRuleSettingsById(settings);
+  const countsByRule = findings.reduce<Map<string, number>>((counts, finding) => {
+    counts.set(finding.ruleId, (counts.get(finding.ruleId) ?? 0) + 1);
+    return counts;
+  }, new Map());
+
+  return rules.map((rule) => {
+    const findingCount = countsByRule.get(rule.ruleId) ?? 0;
+    const isDisabled = ruleSettings.get(rule.ruleId) === false;
+
+    return {
+      ...rule,
+      findingCount,
+      status: isDisabled ? "disabled" : findingCount > 0 ? "failed" : "passed"
+    };
+  });
+}
+
 function highestRiskFinding(findings: Finding[]): Finding | undefined {
   const severityOrder: Severity[] = ["critical", "high", "medium", "low", "info"];
   return [...findings].sort((first, second) => {
@@ -267,6 +309,10 @@ export default function Home() {
     [scan, suppressedFingerprints]
   );
   const visibleSummary = useMemo(() => summarizeVisibleFindings(visibleFindings), [visibleFindings]);
+  const scanChecks = useMemo(
+    () => (scan ? scan.checks ?? buildFallbackChecks(analyzerRules, scan.findings, scanSettings) : []),
+    [analyzerRules, scan, scanSettings]
+  );
   const hasFindings = Boolean(visibleFindings.length);
   const findingCount = visibleFindings.length;
   const reportJson = useMemo(() => (scan ? JSON.stringify(scan, null, 2) : ""), [scan]);
@@ -660,7 +706,7 @@ export default function Home() {
       setScan(data.scan);
       setScanProgress("결과 저장 중 / Saving result");
       setComparison(data.comparison ?? null);
-      setSelectedSavedAt(null);
+      setSelectedSavedAt(data.history?.savedAt ?? null);
       if (data.history) {
         setScanHistory((currentHistory) => [
           data.history as ScanHistoryEntry,
@@ -1080,7 +1126,8 @@ export default function Home() {
 
               {selectedSavedAt ? (
                 <p className="saved-scan-note">
-                  저장된 스캔을 보는 중 · {new Date(selectedSavedAt).toLocaleString()}
+                  저장된 스캔을 보는 중 / Saved scan · 스캔 일시 / Scanned at:{" "}
+                  {new Date(selectedSavedAt).toLocaleString()}
                 </p>
               ) : null}
 
@@ -1100,6 +1147,10 @@ export default function Home() {
                   </div>
                 </div>
               </section>
+
+              {scanChecks.length ? (
+                <ScanCoverage checks={scanChecks} />
+              ) : null}
 
               {comparison ? (
                 <section className="comparison-panel" aria-labelledby="comparison-title">
@@ -1353,6 +1404,55 @@ function ComparisonList({
   );
 }
 
+function ScanCoverage({ checks }: { checks: ScanCheckResult[] }) {
+  const totals = checks.reduce<Record<ScanCheckStatus, number>>(
+    (counts, check) => ({ ...counts, [check.status]: counts[check.status] + 1 }),
+    { failed: 0, passed: 0, disabled: 0 }
+  );
+
+  return (
+    <section className="scan-coverage" aria-labelledby="scan-coverage-title">
+      <div className="scan-coverage-heading">
+        <h3 id="scan-coverage-title">점검 항목 / Scan coverage</h3>
+        <span>{checks.length} rules / 규칙</span>
+      </div>
+      <div className="coverage-summary" aria-label="점검 상태 요약 / Coverage status summary">
+        <div>
+          <span>발견 / Findings</span>
+          <strong>{totals.failed}</strong>
+        </div>
+        <div>
+          <span>통과 / Passed</span>
+          <strong>{totals.passed}</strong>
+        </div>
+        <div>
+          <span>비활성 / Disabled</span>
+          <strong>{totals.disabled}</strong>
+        </div>
+      </div>
+      <ul className="coverage-list">
+        {checks.map((check) => (
+          <li className={`coverage-item coverage-${check.status}`} key={check.ruleId}>
+            <div className="coverage-title-row">
+              <span className={`coverage-status coverage-status-${check.status}`}>
+                {checkStatusLabels[check.status]}
+              </span>
+              <strong>{check.title}</strong>
+            </div>
+            <p>{check.description}</p>
+            <div className="coverage-meta">
+              <span>{check.ruleId}</span>
+              <span>{categoryLabels[check.category]}</span>
+              <span>{severityLabels[check.severity]}</span>
+              <span>{check.findingCount} found / 발견</span>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function HistoryEntryItem({
   baselineScanId,
   entry,
@@ -1391,6 +1491,9 @@ function HistoryEntryItem({
             {entry.scan.repository.owner}/{entry.scan.repository.name}
           </strong>
           <span>{entry.scan.id}</span>
+          <span className="history-scan-date">
+            스캔 일시 / Scanned at: {new Date(entry.savedAt).toLocaleString()}
+          </span>
           {topFinding ? (
             <span className="history-top-risk">
               최고 위험: {categoryLabels[topFinding.category]} · {topFinding.title}

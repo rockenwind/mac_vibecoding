@@ -7,6 +7,7 @@ type RuleMatch = {
   severity: Severity;
   confidence: FindingConfidence;
   category: FindingCategory;
+  description: string;
   pattern: RegExp;
   filePattern?: RegExp;
   whyItMatters: string;
@@ -18,6 +19,7 @@ export type AnalyzerRuleMetadata = {
   title: string;
   severity: Severity;
   category: FindingCategory;
+  description: string;
 };
 
 const rules: RuleMatch[] = [
@@ -27,6 +29,7 @@ const rules: RuleMatch[] = [
     severity: "critical",
     confidence: "high",
     category: "secret",
+    description: "API 키, 토큰, 비밀번호처럼 코드에 직접 들어간 비밀값을 찾습니다.",
     pattern:
       /\b(sk-(?:proj-)?[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|(?=[A-Za-z0-9_-]*(?:api[_-]?key|apikey|token|secret|password))[A-Za-z0-9_-]+\s*[:=]\s*["']?[A-Za-z0-9_./+=-]{16,})\b/i,
     whyItMatters: "Exposed credentials can let attackers access model providers, source control, or internal services.",
@@ -39,6 +42,7 @@ const rules: RuleMatch[] = [
     severity: "high",
     confidence: "medium",
     category: "dangerous-execution",
+    description: "LLM 또는 사용자 입력이 넓은 명령 실행 경로로 이어질 수 있는 코드를 찾습니다.",
     pattern: /\b(child_process\.exec|(?<!\.)\bexec\(|subprocess\.|os\.system|new Function\(|eval\()/,
     whyItMatters: "Agent or LLM-controlled command execution can become remote code execution if user input reaches this path.",
     fixSuggestion:
@@ -50,6 +54,7 @@ const rules: RuleMatch[] = [
     severity: "medium",
     confidence: "low",
     category: "prompt-injection",
+    description: "숨겨진 시스템 프롬프트나 개발자 지시문을 노출하도록 유도하는 문구를 찾습니다.",
     pattern: /(reveal|print|show).{0,40}(system prompt|hidden instruction|developer message)/i,
     whyItMatters:
       "Prompts that permit disclosure of hidden instructions weaken the boundary between user input and trusted control text.",
@@ -62,6 +67,7 @@ const rules: RuleMatch[] = [
     severity: "medium",
     confidence: "medium",
     category: "dangerous-execution",
+    description: "요청 값이 SQL 문자열에 직접 삽입되는 동적 데이터베이스 쿼리를 확인합니다.",
     pattern: /\b(?:db|database|client|pool)\.query\s*\(\s*`[^`]*\$\{[^}]+(?:searchParams|get\(|query|params|request|req)[^}]*\}[^`]*`/i,
     filePattern: /\.(?:ts|tsx|js|jsx|py)$/i,
     whyItMatters: "Interpolating request data into database queries can introduce SQL injection paths.",
@@ -73,6 +79,7 @@ const rules: RuleMatch[] = [
     severity: "medium",
     confidence: "medium",
     category: "dangerous-execution",
+    description: "사용자 입력이 서버의 외부 요청 주소로 사용되는지 확인합니다.",
     pattern: /\bfetch\s*\(\s*(?:req|request)\.(?:query|params|body|nextUrl|url)/i,
     filePattern: /\.(?:ts|tsx|js|jsx)$/i,
     whyItMatters: "Fetching user-controlled URLs can create server-side request forgery or data exfiltration risks.",
@@ -97,31 +104,36 @@ const specialRules: AnalyzerRuleMetadata[] = [
     ruleId: "secret.env-file",
     title: "Environment file committed to repository",
     severity: "high",
-    category: "secret"
+    category: "secret",
+    description: "실제 환경 변수 파일이 저장소에 포함되어 비밀값이 노출될 수 있는지 확인합니다."
   },
   {
     ruleId: "mcp.broad-filesystem-shell",
     title: "MCP configuration combines shell access and broad filesystem access",
     severity: "high",
-    category: "mcp"
+    category: "mcp",
+    description: "MCP 설정에서 셸 실행과 넓은 파일시스템 접근이 동시에 허용되는지 확인합니다."
   },
   {
     ruleId: "api.missing-auth-review",
     title: "API mutation route needs authentication review",
     severity: "medium",
-    category: "agent-tooling"
+    category: "agent-tooling",
+    description: "데이터를 변경하는 API 라우트에 인증 확인이 보이는지 점검합니다."
   },
   {
     ruleId: "admin.missing-authorization-review",
     title: "Admin route needs authorization review",
     severity: "high",
-    category: "agent-tooling"
+    category: "agent-tooling",
+    description: "관리자 API 라우트에 역할 또는 권한 확인이 보이는지 점검합니다."
   },
   {
     ruleId: "nextjs.client-secret-exposure",
     title: "Client component references server secret",
     severity: "high",
-    category: "secret"
+    category: "secret",
+    description: "Next.js 클라이언트 컴포넌트에서 서버 비밀값 환경 변수를 참조하는지 확인합니다."
   }
 ];
 
@@ -131,7 +143,8 @@ export function listAnalyzerRules(): AnalyzerRuleMetadata[] {
       ruleId: rule.ruleId,
       title: rule.title,
       severity: rule.severity,
-      category: rule.category
+      category: rule.category,
+      description: rule.description
     })),
     ...specialRules
   ].sort((left, right) => left.ruleId.localeCompare(right.ruleId));
