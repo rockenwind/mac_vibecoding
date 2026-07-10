@@ -323,6 +323,21 @@ describe("Home", () => {
                     warnings: [],
                     findings: []
                   }
+                },
+                {
+                  savedAt: "2026-07-01T00:00:00.000Z",
+                  scan: {
+                    id: "scan_clean",
+                    repository: {
+                      owner: "example",
+                      name: "clean",
+                      url: "https://github.com/example/clean",
+                      defaultBranch: "main"
+                    },
+                    summary: { critical: 0, high: 0, medium: 0, low: 0, info: 0 },
+                    warnings: [],
+                    findings: []
+                  }
                 }
               ]
             })
@@ -582,6 +597,26 @@ describe("Home", () => {
     expect(screen.getByText("scan_previous")).toBeInTheDocument();
   });
 
+  it("filters saved scan history by repository and finding status", async () => {
+    render(<Home />);
+
+    expect(await screen.findByText("scan_previous")).toBeInTheDocument();
+    expect(screen.getByText("scan_clean")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("히스토리 저장소 필터 / History repository filter"), {
+      target: { value: "clean" }
+    });
+
+    expect(screen.queryByText("scan_previous")).not.toBeInTheDocument();
+    expect(screen.getByText("scan_clean")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("히스토리 결과 필터 / History result filter"), {
+      target: { value: "with-findings" }
+    });
+
+    expect(screen.getByText("필터 조건에 맞는 저장 스캔이 없습니다. / No saved scans match the filters.")).toBeInTheDocument();
+  });
+
   it("can mark a recent scan as baseline", async () => {
     const fetchMock = vi.mocked(fetch);
     render(<Home />);
@@ -609,6 +644,7 @@ describe("Home", () => {
     expect(screen.getByRole("heading", { name: "위험 요약 / Risk summary" })).toBeInTheDocument();
     expect(screen.getByText("필요 조치 / Required action")).toBeInTheDocument();
     expect(screen.getByText(/Compared with scan_older/)).toBeInTheDocument();
+    expect(screen.getByText(/비교 대상 일시 \/ Compared scan time/)).toBeInTheDocument();
     expect(screen.getAllByText("Possible exposed credential").length).toBeGreaterThan(0);
   });
 

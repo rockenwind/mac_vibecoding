@@ -39,6 +39,26 @@ describe("GET /api/scans/[scanId]/markdown", () => {
           },
           summary: { critical: 1, high: 0, medium: 0, low: 0, info: 0 },
           warnings: [],
+          checks: [
+            {
+              ruleId: "secret.exposed-token",
+              title: "Possible exposed credential",
+              severity: "critical",
+              category: "secret",
+              description: "API 키, 토큰, 비밀번호처럼 코드에 직접 들어간 비밀값을 찾습니다.",
+              status: "failed",
+              findingCount: 1
+            },
+            {
+              ruleId: "network.user-controlled-request",
+              title: "Outbound request uses user-controlled URL",
+              severity: "medium",
+              category: "dangerous-execution",
+              description: "사용자 입력이 서버의 외부 요청 주소로 사용되는지 확인합니다.",
+              status: "passed",
+              findingCount: 0
+            }
+          ],
           findings: [
             {
               id: "secret.exposed-token:.env:1",
@@ -70,6 +90,8 @@ describe("GET /api/scans/[scanId]/markdown", () => {
     expect(response.headers.get("Content-Type")).toContain("text/markdown");
     expect(response.headers.get("Content-Disposition")).toContain("scan_test.md");
     expect(body).toContain("# Repository scan: example/repo");
+    expect(body).toContain("- Scanned at: 2026-07-02T00:00:00.000Z");
+    expect(body).toContain("| Passed | Outbound request uses user-controlled URL | Medium | dangerous-execution | 0 |");
   });
 
   it("excludes suppressed findings from the Markdown report", async () => {
@@ -85,7 +107,8 @@ describe("GET /api/scans/[scanId]/markdown", () => {
     expect(response.status).toBe(200);
     expect(body).toContain("| Critical | 0 |");
     expect(body).toContain("No findings were detected.");
-    expect(body).not.toContain("Possible exposed credential");
+    expect(body).not.toContain("### Possible exposed credential");
+    expect(body).not.toContain("- ID: secret.exposed-token:.env:1");
   });
 
   it("returns 404 when a scan is not saved", async () => {

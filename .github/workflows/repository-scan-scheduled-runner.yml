@@ -42,3 +42,20 @@ jobs:
             echo "Scheduled scan trigger failed with HTTP ${status_code}." >&2
             exit 1
           fi
+
+          node - "${response_file}" <<'NODE'
+          const fs = require("fs");
+          const body = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+          const summary = body.summary ?? { due: 0, success: 0, failed: 0, notifications: 0 };
+          console.log(
+            `Scheduled scan summary: due=${summary.due}, success=${summary.success}, failed=${summary.failed}, notifications=${summary.notifications}`
+          );
+          const failedResults = (body.results ?? []).filter((result) => result.status === "failed");
+          if (failedResults.length) {
+            console.error("One or more scheduled scans failed:");
+            for (const result of failedResults) {
+              console.error(`- ${result.repositoryKey}: ${result.error ?? "Unknown error"}`);
+            }
+            process.exit(1);
+          }
+          NODE

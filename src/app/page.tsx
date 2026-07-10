@@ -289,6 +289,8 @@ export default function Home() {
   const [scanSettings, setScanSettings] = useState<ScanSettings>({ baselines: [], suppressions: [], rules: [] });
   const [analyzerRules, setAnalyzerRules] = useState<AnalyzerRule[]>([]);
   const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [historyRepositoryFilter, setHistoryRepositoryFilter] = useState("");
+  const [historyResultFilter, setHistoryResultFilter] = useState("all");
   const [scanProgress, setScanProgress] = useState<string | null>(null);
   const [isUpdatingSettings, setIsUpdatingSettings] = useState(false);
   const [scheduledScans, setScheduledScans] = useState<ScanSchedule[]>([]);
@@ -316,7 +318,32 @@ export default function Home() {
   const hasFindings = Boolean(visibleFindings.length);
   const findingCount = visibleFindings.length;
   const reportJson = useMemo(() => (scan ? JSON.stringify(scan, null, 2) : ""), [scan]);
-  const recentHistory = scanHistory.slice(0, 5);
+  const filteredHistory = useMemo(
+    () =>
+      scanHistory.filter((entry) => {
+        const repositoryKey = repositoryKeyForScan(entry.scan).toLowerCase();
+        const query = historyRepositoryFilter.trim().toLowerCase();
+        const matchesRepository = !query || repositoryKey.includes(query) || entry.scan.id.toLowerCase().includes(query);
+        const isBaseline = scanSettings.baselines.some(
+          (baseline) => baseline.repositoryKey === repositoryKeyForScan(entry.scan) && baseline.scanId === entry.scan.id
+        );
+        const matchesResult =
+          historyResultFilter === "all" ||
+          (historyResultFilter === "with-findings" && entry.scan.findings.length > 0) ||
+          (historyResultFilter === "clean" && entry.scan.findings.length === 0) ||
+          (historyResultFilter === "baseline" && isBaseline);
+
+        return matchesRepository && matchesResult;
+      }),
+    [historyRepositoryFilter, historyResultFilter, scanHistory, scanSettings.baselines]
+  );
+  const recentHistory = filteredHistory.slice(0, 10);
+  const comparedScanSavedAt = useMemo(() => {
+    if (!comparison?.previousScanId) {
+      return null;
+    }
+    return scanHistory.find((entry) => entry.scan.id === comparison.previousScanId)?.savedAt ?? "unknown";
+  }, [comparison?.previousScanId, scanHistory]);
 
   useEffect(() => {
     let isMounted = true;
@@ -1066,7 +1093,34 @@ export default function Home() {
         <section className="panel history-panel" aria-labelledby="history-title">
           <div className="panel-heading">
             <h2 id="history-title">최근 스캔 / Recent scans</h2>
-            <span className="scan-id">{recentHistory.length} saved / 저장됨</span>
+            <span className="scan-id">
+              {recentHistory.length}/{scanHistory.length} saved / 저장됨
+            </span>
+          </div>
+          <div className="history-filters">
+            <label htmlFor="history-repository-filter">
+              히스토리 저장소 필터 / History repository filter
+            </label>
+            <input
+              id="history-repository-filter"
+              onChange={(event) => setHistoryRepositoryFilter(event.target.value)}
+              placeholder="owner/repo or scan id"
+              type="search"
+              value={historyRepositoryFilter}
+            />
+            <label htmlFor="history-result-filter">
+              히스토리 결과 필터 / History result filter
+            </label>
+            <select
+              id="history-result-filter"
+              onChange={(event) => setHistoryResultFilter(event.target.value)}
+              value={historyResultFilter}
+            >
+              <option value="all">전체 / All</option>
+              <option value="with-findings">발견 있음 / With findings</option>
+              <option value="clean">발견 없음 / Clean</option>
+              <option value="baseline">기준선 / Baseline</option>
+            </select>
           </div>
           {historyError ? (
             <p className="history-error" role="status">
@@ -1092,6 +1146,8 @@ export default function Home() {
                 />
               ))}
             </ul>
+          ) : scanHistory.length ? (
+            <p className="empty-state">필터 조건에 맞는 저장 스캔이 없습니다. / No saved scans match the filters.</p>
           ) : (
             <p className="empty-state">저장된 스캔이 아직 없습니다. / No saved scans yet.</p>
           )}
@@ -1163,6 +1219,14 @@ export default function Home() {
                   ) : (
                     <p className="comparison-source">이 저장소의 이전 스캔이 없습니다. / No previous scan for this repository.</p>
                   )}
+                  {comparedScanSavedAt ? (
+                    <p className="comparison-source">
+                      비교 대상 일시 / Compared scan time:{" "}
+                      {comparedScanSavedAt === "unknown"
+                        ? "알 수 없음 / Unknown"
+                        : new Date(comparedScanSavedAt).toLocaleString()}
+                    </p>
+                  ) : null}
                   <div className="comparison-grid">
                     <div>
                       <span>새로 발견 / New</span>

@@ -3,6 +3,18 @@ import { buildScheduleNotifications } from "@/lib/scanSchedules/notifications";
 import { readScanSettings, markScanScheduleRun } from "@/lib/scanSettings/store";
 import { runRepositoryScan, scanErrorResponse } from "@/lib/scans/runRepositoryScan";
 
+type ScheduleRunResult = {
+  repositoryKey: string;
+  status: "success" | "failed";
+  scanId?: string;
+  savedAt?: string;
+  nextRunAt?: string;
+  comparison?: unknown;
+  notifications?: unknown[];
+  error?: string;
+  action?: string;
+};
+
 export async function POST(request: Request): Promise<Response> {
   const authError = authorizeScheduledRun(request);
   if (authError) {
@@ -15,7 +27,7 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const settings = await readScanSettings();
     const dueSchedules = findDueSchedules(settings.schedules, now);
-    const results = [];
+    const results: ScheduleRunResult[] = [];
 
     for (const schedule of dueSchedules) {
       try {
@@ -54,11 +66,29 @@ export async function POST(request: Request): Promise<Response> {
       }
     }
 
-    return Response.json({ ranAt: now.toISOString(), results });
+    return Response.json({
+      ranAt: now.toISOString(),
+      summary: summarizeScheduleResults(results),
+      results
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Scheduled scans could not run.";
     return Response.json({ error: message }, { status: 500 });
   }
+}
+
+function summarizeScheduleResults(
+  results: Array<{ status: "success" | "failed"; notifications?: unknown[] }>
+): { due: number; success: number; failed: number; notifications: number } {
+  return results.reduce(
+    (summary, result) => ({
+      due: summary.due + 1,
+      success: summary.success + (result.status === "success" ? 1 : 0),
+      failed: summary.failed + (result.status === "failed" ? 1 : 0),
+      notifications: summary.notifications + (result.notifications?.length ?? 0)
+    }),
+    { due: 0, success: 0, failed: 0, notifications: 0 }
+  );
 }
 
 function authorizeScheduledRun(request: Request): Response | null {
