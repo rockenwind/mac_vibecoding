@@ -7,14 +7,12 @@ import { runScan } from "@/lib/scanner/scan";
 import type { ScanResult } from "@/lib/scanner/types";
 import {
   compareScanResults,
-  findScanById,
   findPreviousScan,
   readScanHistory,
   recordScan
 } from "@/lib/scanHistory/store";
 import type { ScanComparison, ScanHistoryEntry } from "@/lib/scanHistory/types";
 import {
-  baselineScanIdForRepository,
   disabledRuleIds,
   readScanSettings,
   repositoryKey,
@@ -38,17 +36,10 @@ export async function runRepositoryScan(input: RunRepositoryScanInput): Promise<
   const scan = runScan(source, { disabledRuleIds: disabledRuleIds(settings) });
   const existingHistory = await readScanHistory();
   const key = repositoryKey(scan.repository);
-  const baselineScanId = baselineScanIdForRepository(settings, key);
-  const baselineScanCandidate = findScanById(baselineScanId, existingHistory);
-  const baselineScan =
-    baselineScanCandidate && repositoryKey(baselineScanCandidate.scan.repository) === key
-      ? baselineScanCandidate
-      : null;
-  const previousScan = baselineScan ?? findPreviousScan(scan, existingHistory);
+  const previousScan = findPreviousScan(scan, existingHistory);
   const history = await recordScan(scan);
   const comparison = compareScanResults(scan, previousScan, {
-    baselineScanId,
-    comparisonSource: baselineScan ? "baseline" : previousScan ? "previous" : "none",
+    comparisonSource: previousScan ? "previous" : "none",
     suppressedFingerprints: suppressedFingerprintsForRepository(settings, key)
   });
 

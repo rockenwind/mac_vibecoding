@@ -3,12 +3,10 @@ import type { ScanResult } from "@/lib/scanner/types";
 import {
   compareScanResults,
   deleteScan,
-  findScanById,
   readScanHistory
 } from "@/lib/scanHistory/store";
 import type { ScanHistoryEntry } from "@/lib/scanHistory/types";
 import {
-  baselineScanIdForRepository,
   readScanSettings,
   repositoryKey,
   suppressedFingerprintsForRepository
@@ -32,14 +30,9 @@ export async function GET(_request: Request, context: RouteContext): Promise<Res
     }
 
     const key = repositoryKey(selectedEntry.scan.repository);
-    const baselineScanId = baselineScanIdForRepository(settings, key);
-    const baselineCandidate = findScanById(baselineScanId, history);
-    const baselineEntry =
-      baselineCandidate && repositoryKey(baselineCandidate.scan.repository) === key ? baselineCandidate : null;
-    const previousEntry = baselineEntry ?? findPreviousSavedScan(selectedEntry, history);
+    const previousEntry = findPreviousSavedScan(selectedEntry, history);
     const comparison = compareScanResults(selectedEntry.scan, previousEntry, {
-      baselineScanId,
-      comparisonSource: baselineEntry ? "baseline" : previousEntry ? "previous" : "none",
+      comparisonSource: previousEntry ? "previous" : "none",
       suppressedFingerprints: suppressedFingerprintsForRepository(settings, key)
     });
 

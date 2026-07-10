@@ -1,4 +1,4 @@
-import type { Finding, FindingConfidence, ScanResult, Severity } from "@/lib/scanner/types";
+import type { Finding, FindingConfidence, ScanCheckStatus, ScanResult, Severity } from "@/lib/scanner/types";
 
 const severities: Severity[] = ["critical", "high", "medium", "low", "info"];
 
@@ -16,11 +16,22 @@ const confidenceLabels: Record<FindingConfidence, string> = {
   low: "Low"
 };
 
-export function buildScanMarkdown(scan: ScanResult): string {
+const checkStatusLabels: Record<ScanCheckStatus, string> = {
+  failed: "Failed",
+  passed: "Passed",
+  disabled: "Disabled"
+};
+
+type ReportOptions = {
+  savedAt?: string;
+};
+
+export function buildScanMarkdown(scan: ScanResult, options: ReportOptions = {}): string {
   const lines = [
     `# Repository scan: ${scan.repository.owner}/${scan.repository.name}`,
     "",
     `- Scan ID: ${scan.id}`,
+    ...(options.savedAt ? [`- Scanned at: ${options.savedAt}`] : []),
     `- Repository: ${scan.repository.url}`,
     `- Branch: ${scan.repository.defaultBranch}`,
     `- Findings: ${scan.findings.length}`,
@@ -39,6 +50,20 @@ export function buildScanMarkdown(scan: ScanResult): string {
       lines.push(`- ${warning.message}`);
     }
     lines.push("");
+  }
+
+  if (scan.checks?.length) {
+    lines.push(
+      "## Scan coverage",
+      "",
+      "| Status | Rule | Severity | Category | Findings | Description |",
+      "| --- | --- | --- | --- | ---: | --- |",
+      ...scan.checks.map(
+        (check) =>
+          `| ${checkStatusLabels[check.status]} | ${escapeTableCell(check.title)} | ${severityLabels[check.severity]} | ${check.category} | ${check.findingCount} | ${escapeTableCell(check.description)} |`
+      ),
+      ""
+    );
   }
 
   lines.push("## Findings", "");
@@ -80,6 +105,10 @@ export function buildScanMarkdown(scan: ScanResult): string {
   });
 
   return `${lines.join("\n")}\n`;
+}
+
+function escapeTableCell(value: string): string {
+  return value.replaceAll("|", "\\|").replace(/\s+/g, " ").trim();
 }
 
 function formatLocation(finding: Finding): string {

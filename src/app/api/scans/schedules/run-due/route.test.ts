@@ -160,6 +160,12 @@ describe("POST /api/scans/schedules/run-due", () => {
       new Date("2026-07-05T00:00:00.000Z")
     );
     expect(body.results[0]).toMatchObject({ repositoryKey: "example/repo", status: "success" });
+    expect(body.summary).toEqual({
+      due: 1,
+      success: 1,
+      failed: 0,
+      notifications: 0
+    });
   });
 
   it("returns failed results without stopping other schedules", async () => {
@@ -196,6 +202,12 @@ describe("POST /api/scans/schedules/run-due", () => {
       repositoryKey: "example/repo",
       status: "failed",
       error: "GitHub App permission was denied."
+    });
+    expect(body.summary).toEqual({
+      due: 1,
+      success: 0,
+      failed: 1,
+      notifications: 0
     });
   });
 });

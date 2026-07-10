@@ -1,4 +1,4 @@
-import type { Finding, ScanResult, Severity } from "@/lib/scanner/types";
+import type { Finding, ScanCheckStatus, ScanResult, Severity } from "@/lib/scanner/types";
 
 const severities: Severity[] = ["critical", "high", "medium", "low", "info"];
 
@@ -10,11 +10,28 @@ const severityLabels: Record<Severity, string> = {
   info: "Info"
 };
 
-export function buildSecurityChecklist(scan: ScanResult): string {
+const checkStatusLabels: Record<ScanCheckStatus, string> = {
+  failed: "Failed",
+  passed: "Passed",
+  disabled: "Disabled"
+};
+
+const checkMarks: Record<ScanCheckStatus, " " | "x" | "-"> = {
+  failed: " ",
+  passed: "x",
+  disabled: "-"
+};
+
+type ChecklistOptions = {
+  savedAt?: string;
+};
+
+export function buildSecurityChecklist(scan: ScanResult, options: ChecklistOptions = {}): string {
   const lines = [
     `# Security checklist: ${scan.repository.owner}/${scan.repository.name}`,
     "",
     `- Scan ID: ${scan.id}`,
+    ...(options.savedAt ? [`- Scanned at: ${options.savedAt}`] : []),
     `- Repository: ${scan.repository.url}`,
     `- Branch: ${scan.repository.defaultBranch}`,
     `- Findings: ${scan.findings.length}`,
@@ -31,6 +48,21 @@ export function buildSecurityChecklist(scan: ScanResult): string {
     lines.push("## Warnings", "");
     for (const warning of scan.warnings) {
       lines.push(`- [ ] Review scan warning: ${warning.message}`);
+    }
+    lines.push("");
+  }
+
+  if (scan.checks?.length) {
+    lines.push("## Scan coverage", "");
+    for (const check of scan.checks) {
+      lines.push(
+        `- [${checkMarks[check.status]}] **${checkStatusLabels[check.status]}** ${check.title}`,
+        `  - Rule: ${check.ruleId}`,
+        `  - Severity: ${severityLabels[check.severity]}`,
+        `  - Category: ${check.category}`,
+        `  - Findings: ${check.findingCount}`,
+        `  - Description: ${check.description}`
+      );
     }
     lines.push("");
   }

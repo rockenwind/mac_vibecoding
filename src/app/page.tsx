@@ -82,7 +82,6 @@ type DeleteScanResponse = {
 };
 
 type ScanSettings = {
-  baselines: Array<{ repositoryKey: string; scanId: string; updatedAt: string }>;
   suppressions: Array<{ repositoryKey: string; fingerprint: string; reason?: string; createdAt: string }>;
   rules: Array<{ ruleId: string; enabled: boolean; updatedAt: string }>;
 };
@@ -93,6 +92,12 @@ type AnalyzerRule = {
   severity: Severity;
   category: Finding["category"];
   description: string;
+  sourcePath?: string;
+  detectionType?: string;
+  detectionSummary?: string;
+  impact?: string;
+  remediation?: string;
+  limitations?: string;
 };
 
 type ScanSettingsResponse = {
@@ -245,6 +250,119 @@ function buildFallbackChecks(
   });
 }
 
+type DirectScanComparison = ScanComparison & {
+  leftEntry: ScanHistoryEntry;
+  rightEntry: ScanHistoryEntry;
+  changedChecks: Array<{
+    ruleId: string;
+    title: string;
+    beforeStatus: ScanCheckStatus | null;
+    afterStatus: ScanCheckStatus | null;
+  }>;
+  error?: string;
+};
+
+function compareSavedScanEntries(leftEntry: ScanHistoryEntry | null, rightEntry: ScanHistoryEntry | null): DirectScanComparison | null {
+  if (!leftEntry || !rightEntry) {
+    return null;
+  }
+
+  if (leftEntry.scan.id === rightEntry.scan.id) {
+    return {
+      leftEntry,
+      rightEntry,
+      previousScanId: null,
+      comparisonSource: "none",
+      newFindings: [],
+      resolvedFindings: [],
+      unchangedFindings: [],
+      suppressedFindings: [],
+      changedChecks: [],
+      error: "서로 다른 스캔 결과 2개를 선택하세요. / Select two different scan results."
+    };
+  }
+
+  if (repositoryKeyForScan(leftEntry.scan) !== repositoryKeyForScan(rightEntry.scan)) {
+    return {
+      leftEntry,
+      rightEntry,
+      previousScanId: leftEntry.scan.id,
+      comparisonSource: "none",
+      newFindings: [],
+      resolvedFindings: [],
+      unchangedFindings: [],
+      suppressedFindings: [],
+      changedChecks: [],
+      error: "같은 저장소의 스캔 결과 2개만 비교할 수 있습니다. / Select two scans from the same repository."
+    };
+  }
+
+  const [olderEntry, newerEntry] =
+    Date.parse(leftEntry.savedAt) <= Date.parse(rightEntry.savedAt) ? [leftEntry, rightEntry] : [rightEntry, leftEntry];
+  const previousByFingerprint = groupFindingsByFingerprint(olderEntry.scan.findings);
+  const currentByFingerprint = groupFindingsByFingerprint(newerEntry.scan.findings);
+  const fingerprints = new Set([...previousByFingerprint.keys(), ...currentByFingerprint.keys()]);
+  const newFindings: Finding[] = [];
+  const resolvedFindings: Finding[] = [];
+  const unchangedFindings: Finding[] = [];
+
+  for (const fingerprint of fingerprints) {
+    const previousFindings = previousByFingerprint.get(fingerprint) ?? [];
+    const currentFindings = currentByFingerprint.get(fingerprint) ?? [];
+    const matchedCount = Math.min(previousFindings.length, currentFindings.length);
+
+    unchangedFindings.push(...currentFindings.slice(0, matchedCount));
+    newFindings.push(...currentFindings.slice(matchedCount));
+    resolvedFindings.push(...previousFindings.slice(matchedCount));
+  }
+
+  return {
+    leftEntry: olderEntry,
+    rightEntry: newerEntry,
+    previousScanId: olderEntry.scan.id,
+    comparisonSource: "previous",
+    newFindings,
+    resolvedFindings,
+    unchangedFindings,
+    suppressedFindings: [],
+    changedChecks: compareScanChecks(olderEntry.scan.checks ?? [], newerEntry.scan.checks ?? [])
+  };
+}
+
+function groupFindingsByFingerprint(findings: Finding[]): Map<string, Finding[]> {
+  return findings.reduce<Map<string, Finding[]>>((grouped, finding) => {
+    const fingerprint = findingFingerprint(finding);
+    grouped.set(fingerprint, [...(grouped.get(fingerprint) ?? []), finding]);
+    return grouped;
+  }, new Map());
+}
+
+function compareScanChecks(
+  leftChecks: ScanCheckResult[],
+  rightChecks: ScanCheckResult[]
+): DirectScanComparison["changedChecks"] {
+  const leftByRule = new Map(leftChecks.map((check) => [check.ruleId, check]));
+  const rightByRule = new Map(rightChecks.map((check) => [check.ruleId, check]));
+  const ruleIds = new Set([...leftByRule.keys(), ...rightByRule.keys()]);
+
+  return [...ruleIds]
+    .map((ruleId) => {
+      const leftCheck = leftByRule.get(ruleId);
+      const rightCheck = rightByRule.get(ruleId);
+      if (leftCheck?.status === rightCheck?.status) {
+        return null;
+      }
+
+      return {
+        ruleId,
+        title: rightCheck?.title ?? leftCheck?.title ?? ruleId,
+        beforeStatus: leftCheck?.status ?? null,
+        afterStatus: rightCheck?.status ?? null
+      };
+    })
+    .filter((change): change is DirectScanComparison["changedChecks"][number] => Boolean(change));
+}
+
 function highestRiskFinding(findings: Finding[]): Finding | undefined {
   const severityOrder: Severity[] = ["critical", "high", "medium", "low", "info"];
   return [...findings].sort((first, second) => {
@@ -286,9 +404,13 @@ export default function Home() {
   const [repositoryStatus, setRepositoryStatus] = useState<string | null>(null);
   const [isLoadingInstallations, setIsLoadingInstallations] = useState(false);
   const [isLoadingRepositories, setIsLoadingRepositories] = useState(false);
-  const [scanSettings, setScanSettings] = useState<ScanSettings>({ baselines: [], suppressions: [], rules: [] });
+  const [scanSettings, setScanSettings] = useState<ScanSettings>({ suppressions: [], rules: [] });
   const [analyzerRules, setAnalyzerRules] = useState<AnalyzerRule[]>([]);
   const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [historyRepositoryFilter, setHistoryRepositoryFilter] = useState("");
+  const [historyResultFilter, setHistoryResultFilter] = useState("all");
+  const [compareLeftScanId, setCompareLeftScanId] = useState<string | null>(null);
+  const [compareRightScanId, setCompareRightScanId] = useState<string | null>(null);
   const [scanProgress, setScanProgress] = useState<string | null>(null);
   const [isUpdatingSettings, setIsUpdatingSettings] = useState(false);
   const [scheduledScans, setScheduledScans] = useState<ScanSchedule[]>([]);
@@ -316,7 +438,33 @@ export default function Home() {
   const hasFindings = Boolean(visibleFindings.length);
   const findingCount = visibleFindings.length;
   const reportJson = useMemo(() => (scan ? JSON.stringify(scan, null, 2) : ""), [scan]);
-  const recentHistory = scanHistory.slice(0, 5);
+  const filteredHistory = useMemo(
+    () =>
+      scanHistory.filter((entry) => {
+        const repositoryKey = repositoryKeyForScan(entry.scan).toLowerCase();
+        const query = historyRepositoryFilter.trim().toLowerCase();
+        const matchesRepository = !query || repositoryKey.includes(query) || entry.scan.id.toLowerCase().includes(query);
+        const matchesResult =
+          historyResultFilter === "all" ||
+          (historyResultFilter === "with-findings" && entry.scan.findings.length > 0) ||
+          (historyResultFilter === "clean" && entry.scan.findings.length === 0);
+
+        return matchesRepository && matchesResult;
+      }),
+    [historyRepositoryFilter, historyResultFilter, scanHistory]
+  );
+  const recentHistory = filteredHistory.slice(0, 10);
+  const directComparison = useMemo(() => {
+    const leftEntry = scanHistory.find((entry) => entry.scan.id === compareLeftScanId) ?? null;
+    const rightEntry = scanHistory.find((entry) => entry.scan.id === compareRightScanId) ?? null;
+    return compareSavedScanEntries(leftEntry, rightEntry);
+  }, [compareLeftScanId, compareRightScanId, scanHistory]);
+  const comparedScanSavedAt = useMemo(() => {
+    if (!comparison?.previousScanId) {
+      return null;
+    }
+    return scanHistory.find((entry) => entry.scan.id === comparison.previousScanId)?.savedAt ?? "unknown";
+  }, [comparison?.previousScanId, scanHistory]);
 
   useEffect(() => {
     let isMounted = true;
@@ -507,10 +655,6 @@ export default function Home() {
     } finally {
       setIsUpdatingSettings(false);
     }
-  }
-
-  async function handleSetBaseline(scanId: string, repositoryKey: string) {
-    await updateScanSettings({ action: "setBaseline", repositoryKey, scanId });
   }
 
   async function handleRuleToggle(ruleId: string, enabled: boolean) {
@@ -1066,7 +1210,33 @@ export default function Home() {
         <section className="panel history-panel" aria-labelledby="history-title">
           <div className="panel-heading">
             <h2 id="history-title">최근 스캔 / Recent scans</h2>
-            <span className="scan-id">{recentHistory.length} saved / 저장됨</span>
+            <span className="scan-id">
+              {recentHistory.length}/{scanHistory.length} saved / 저장됨
+            </span>
+          </div>
+          <div className="history-filters">
+            <label htmlFor="history-repository-filter">
+              히스토리 저장소 필터 / History repository filter
+            </label>
+            <input
+              id="history-repository-filter"
+              onChange={(event) => setHistoryRepositoryFilter(event.target.value)}
+              placeholder="owner/repo or scan id"
+              type="search"
+              value={historyRepositoryFilter}
+            />
+            <label htmlFor="history-result-filter">
+              히스토리 결과 필터 / History result filter
+            </label>
+            <select
+              id="history-result-filter"
+              onChange={(event) => setHistoryResultFilter(event.target.value)}
+              value={historyResultFilter}
+            >
+              <option value="all">전체 / All</option>
+              <option value="with-findings">발견 있음 / With findings</option>
+              <option value="clean">발견 없음 / Clean</option>
+            </select>
           </div>
           {historyError ? (
             <p className="history-error" role="status">
@@ -1077,25 +1247,32 @@ export default function Home() {
               {recentHistory.map((entry) => (
                 <HistoryEntryItem
                   entry={entry}
-                  baselineScanId={
-                    scanSettings.baselines.find(
-                      (baseline) => baseline.repositoryKey === repositoryKeyForScan(entry.scan)
-                    )?.scanId ?? null
-                  }
+                  isCompareLeft={compareLeftScanId === entry.scan.id}
+                  isCompareRight={compareRightScanId === entry.scan.id}
                   isDeleting={isDeletingScanId === entry.scan.id}
                   isLoading={isLoadingSavedScanId === entry.scan.id}
-                  isUpdatingSettings={isUpdatingSettings}
                   key={`${entry.savedAt}-${entry.scan.id}`}
                   onDelete={handleDeleteSavedScan}
                   onOpen={handleOpenSavedScan}
-                  onSetBaseline={handleSetBaseline}
+                  onSelectCompareLeft={setCompareLeftScanId}
+                  onSelectCompareRight={setCompareRightScanId}
                 />
               ))}
             </ul>
+          ) : scanHistory.length ? (
+            <p className="empty-state">필터 조건에 맞는 저장 스캔이 없습니다. / No saved scans match the filters.</p>
           ) : (
             <p className="empty-state">저장된 스캔이 아직 없습니다. / No saved scans yet.</p>
           )}
         </section>
+
+        {compareLeftScanId || compareRightScanId ? (
+          <DirectComparisonPanel
+            comparison={directComparison}
+            leftScanId={compareLeftScanId}
+            rightScanId={compareRightScanId}
+          />
+        ) : null}
 
         {scan ? (
           <div className="results-grid">
@@ -1152,17 +1329,27 @@ export default function Home() {
                 <ScanCoverage checks={scanChecks} />
               ) : null}
 
+              <RuleDetailList rules={analyzerRules} />
+
               {comparison ? (
                 <section className="comparison-panel" aria-labelledby="comparison-title">
                   <h3 id="comparison-title">비교 / Comparison</h3>
                   {comparison.previousScanId ? (
                     <p className="comparison-source">
                       비교 기준 / Compared with {comparison.previousScanId}
-                      {comparison.comparisonSource === "baseline" ? " · 기준선 / Baseline" : " · 직전 스캔 / Previous scan"}
+                      {" · 직전 스캔 / Previous scan"}
                     </p>
                   ) : (
                     <p className="comparison-source">이 저장소의 이전 스캔이 없습니다. / No previous scan for this repository.</p>
                   )}
+                  {comparedScanSavedAt ? (
+                    <p className="comparison-source">
+                      비교 대상 일시 / Compared scan time:{" "}
+                      {comparedScanSavedAt === "unknown"
+                        ? "알 수 없음 / Unknown"
+                        : new Date(comparedScanSavedAt).toLocaleString()}
+                    </p>
+                  ) : null}
                   <div className="comparison-grid">
                     <div>
                       <span>새로 발견 / New</span>
@@ -1404,6 +1591,86 @@ function ComparisonList({
   );
 }
 
+function DirectComparisonPanel({
+  comparison,
+  leftScanId,
+  rightScanId
+}: {
+  comparison: DirectScanComparison | null;
+  leftScanId: string | null;
+  rightScanId: string | null;
+}) {
+  return (
+    <section className="panel comparison-panel" aria-labelledby="direct-comparison-title">
+      <div className="panel-heading">
+        <div>
+          <p className="panel-kicker">저장 스캔 비교 / Saved scan comparison</p>
+          <h2 id="direct-comparison-title">스캔 결과 직접 비교</h2>
+        </div>
+        <span className="scan-id">
+          {leftScanId ?? "A 미선택"} → {rightScanId ?? "B 미선택"}
+        </span>
+      </div>
+      {!leftScanId || !rightScanId ? (
+        <p className="comparison-source">비교할 스캔 A와 B를 선택하세요. / Select scan A and scan B to compare.</p>
+      ) : comparison?.error ? (
+        <p className="history-error" role="alert">
+          {comparison.error}
+        </p>
+      ) : comparison ? (
+        <>
+          <div className="comparison-grid">
+            <div>
+              <span>새로 발견</span>
+              <strong>{comparison.newFindings.length}</strong>
+            </div>
+            <div>
+              <span>해결됨</span>
+              <strong>{comparison.resolvedFindings.length}</strong>
+            </div>
+            <div>
+              <span>계속 남음</span>
+              <strong>{comparison.unchangedFindings.length}</strong>
+            </div>
+          </div>
+          <p className="comparison-source">
+            비교 A / Scan A: {comparison.leftEntry.scan.id} ·{" "}
+            {new Date(comparison.leftEntry.savedAt).toLocaleString()}
+          </p>
+          <p className="comparison-source">
+            비교 B / Scan B: {comparison.rightEntry.scan.id} ·{" "}
+            {new Date(comparison.rightEntry.savedAt).toLocaleString()}
+          </p>
+          <ComparisonList title="새로 발견" emptyText="새로 발견된 취약점이 없습니다." findings={comparison.newFindings} />
+          <ComparisonList title="해결됨" emptyText="해결된 취약점이 없습니다." findings={comparison.resolvedFindings} />
+          <ComparisonList title="계속 남음" emptyText="계속 남아 있는 취약점이 없습니다." findings={comparison.unchangedFindings} />
+          <div className="comparison-list">
+            <h4>검사 항목 변화</h4>
+            {comparison.changedChecks.length ? (
+              <ul>
+                {comparison.changedChecks.map((change) => (
+                  <li key={change.ruleId}>
+                    <span>{change.title}</span>
+                    <small>
+                      {formatCheckStatus(change.beforeStatus)} → {formatCheckStatus(change.afterStatus)} · {change.ruleId}
+                    </small>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="comparison-empty">상태가 바뀐 검사 항목이 없습니다.</p>
+            )}
+          </div>
+        </>
+      ) : null}
+    </section>
+  );
+}
+
+function formatCheckStatus(status: ScanCheckStatus | null): string {
+  return status ? checkStatusLabels[status] : "없음 / Missing";
+}
+
 function ScanCoverage({ checks }: { checks: ScanCheckResult[] }) {
   const totals = checks.reduce<Record<ScanCheckStatus, number>>(
     (counts, check) => ({ ...counts, [check.status]: counts[check.status] + 1 }),
@@ -1453,29 +1720,90 @@ function ScanCoverage({ checks }: { checks: ScanCheckResult[] }) {
   );
 }
 
+function RuleDetailList({ rules }: { rules: AnalyzerRule[] }) {
+  if (!rules.length) {
+    return null;
+  }
+
+  return (
+    <section className="scan-coverage" aria-labelledby="rule-detail-title">
+      <div className="scan-coverage-heading">
+        <h3 id="rule-detail-title">스캔 규칙과 분석 기준</h3>
+        <span>내부 정적 분석 규칙 / Internal static rules</span>
+      </div>
+      <p className="comparison-source">
+        이 스캐너는 외부 상용 스캐너나 취약점 데이터베이스가 아니라 저장소 내부 코드에 정의된 정적 분석 규칙을 사용합니다.
+      </p>
+      <ul className="coverage-list">
+        {rules.map((rule) => (
+          <li className="coverage-item" key={rule.ruleId}>
+            <div className="coverage-title-row">
+              <span className={`severity-badge severity-${rule.severity}`}>
+                {severityLabels[rule.severity]}
+              </span>
+              <strong>{rule.title}</strong>
+            </div>
+            <p>{rule.description}</p>
+            <dl className="finding-details">
+              <div>
+                <dt>탐지 방식</dt>
+                <dd>{rule.detectionType ?? "정적 분석 규칙"}</dd>
+              </div>
+              <div>
+                <dt>탐지 기준</dt>
+                <dd>{rule.detectionSummary ?? rule.description}</dd>
+              </div>
+              <div>
+                <dt>구현 출처</dt>
+                <dd>{rule.sourcePath ?? "src/lib/scanner/analyzers.ts"}</dd>
+              </div>
+              <div>
+                <dt>영향도</dt>
+                <dd>{rule.impact ?? severityImpactLabels[rule.severity]}</dd>
+              </div>
+              <div>
+                <dt>필요 조치</dt>
+                <dd>{rule.remediation ?? "발견 위치를 확인하고 프로젝트 보안 기준에 맞게 조치하세요."}</dd>
+              </div>
+              <div>
+                <dt>한계</dt>
+                <dd>{rule.limitations ?? "정적 분석 특성상 오탐 가능성이 있어 코드 리뷰가 필요합니다."}</dd>
+              </div>
+            </dl>
+            <div className="coverage-meta">
+              <span>{rule.ruleId}</span>
+              <span>{categoryLabels[rule.category]}</span>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function HistoryEntryItem({
-  baselineScanId,
   entry,
+  isCompareLeft,
+  isCompareRight,
   isDeleting,
   isLoading,
-  isUpdatingSettings,
   onDelete,
   onOpen,
-  onSetBaseline
+  onSelectCompareLeft,
+  onSelectCompareRight
 }: {
-  baselineScanId: string | null;
   entry: ScanHistoryEntry;
+  isCompareLeft: boolean;
+  isCompareRight: boolean;
   isDeleting: boolean;
   isLoading: boolean;
-  isUpdatingSettings: boolean;
   onDelete(scanId: string): void;
   onOpen(scanId: string): void;
-  onSetBaseline(scanId: string, repositoryKey: string): void;
+  onSelectCompareLeft(scanId: string): void;
+  onSelectCompareRight(scanId: string): void;
 }) {
   const topFinding = highestRiskFinding(entry.scan.findings);
   const highRiskCount = entry.scan.summary.critical + entry.scan.summary.high;
-  const isBaseline = baselineScanId === entry.scan.id;
-  const key = repositoryKeyForScan(entry.scan);
 
   return (
     <li>
@@ -1508,13 +1836,22 @@ function HistoryEntryItem({
         </small>
       </button>
       <button
-        aria-label={`기준선 지정 / Set baseline ${entry.scan.id}`}
+        aria-label={`비교 A 선택 ${entry.scan.id}`}
         className="history-delete-button"
-        disabled={isUpdatingSettings || isBaseline}
-        onClick={() => onSetBaseline(entry.scan.id, key)}
+        disabled={isCompareLeft}
+        onClick={() => onSelectCompareLeft(entry.scan.id)}
         type="button"
       >
-        {isBaseline ? "기준선 / Baseline" : "기준선 지정 / Set baseline"}
+        {isCompareLeft ? "비교 A" : "비교 A 선택"}
+      </button>
+      <button
+        aria-label={`비교 B 선택 ${entry.scan.id}`}
+        className="history-delete-button"
+        disabled={isCompareRight}
+        onClick={() => onSelectCompareRight(entry.scan.id)}
+        type="button"
+      >
+        {isCompareRight ? "비교 B" : "비교 B 선택"}
       </button>
       <button
         aria-label={`삭제 / Delete ${entry.scan.id}`}

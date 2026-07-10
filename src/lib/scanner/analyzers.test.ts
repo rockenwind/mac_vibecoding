@@ -33,6 +33,22 @@ describe("analyzeFiles", () => {
     );
   });
 
+  it("describes analyzer rule source and detection details", () => {
+    const rules = listAnalyzerRules();
+    const secretRule = rules.find((rule) => rule.ruleId === "secret.exposed-token");
+
+    expect(rules.every((rule) => rule.sourcePath === "src/lib/scanner/analyzers.ts")).toBe(true);
+    expect(secretRule).toEqual(
+      expect.objectContaining({
+        detectionType: "정규식 기반",
+        detectionSummary: expect.stringContaining("API 키"),
+        impact: expect.stringContaining("비밀값"),
+        remediation: expect.stringContaining("폐기"),
+        limitations: expect.stringContaining("오탐")
+      })
+    );
+  });
+
   it("excludes disabled analyzer rules", () => {
     const findings = analyzeFiles(sampleFiles, {
       disabledRuleIds: ["secret.exposed-token", "secret.env-file"]

@@ -3,26 +3,17 @@ import { GET, PATCH } from "./route";
 
 const mocks = vi.hoisted(() => ({
   readScanSettings: vi.fn(),
-  setBaselineScan: vi.fn(),
-  clearBaselineScan: vi.fn(),
   setRuleEnabled: vi.fn(),
   suppressFinding: vi.fn(),
-  unsuppressFinding: vi.fn(),
-  readScanHistory: vi.fn()
+  unsuppressFinding: vi.fn()
 }));
 
 vi.mock("@/lib/scanSettings/store", () => ({
   readScanSettings: mocks.readScanSettings,
   repositoryKey: (repository: { owner: string; name: string }) => `${repository.owner}/${repository.name}`,
-  setBaselineScan: mocks.setBaselineScan,
-  clearBaselineScan: mocks.clearBaselineScan,
   setRuleEnabled: mocks.setRuleEnabled,
   suppressFinding: mocks.suppressFinding,
   unsuppressFinding: mocks.unsuppressFinding
-}));
-
-vi.mock("@/lib/scanHistory/store", () => ({
-  readScanHistory: mocks.readScanHistory
 }));
 
 describe("/api/scans/settings", () => {
@@ -30,23 +21,6 @@ describe("/api/scans/settings", () => {
     vi.clearAllMocks();
     delete process.env.SCAN_ADMIN_TOKEN;
     mocks.readScanSettings.mockResolvedValue({ baselines: [], suppressions: [], rules: [] });
-    mocks.readScanHistory.mockResolvedValue([
-      {
-        savedAt: "2026-07-02T00:00:00.000Z",
-        scan: {
-          id: "scan_1",
-          repository: {
-            owner: "example",
-            name: "repo",
-            url: "https://github.com/example/repo",
-            defaultBranch: "main"
-          },
-          summary: { critical: 0, high: 0, medium: 0, low: 0, info: 0 },
-          warnings: [],
-          findings: []
-        }
-      }
-    ]);
   });
 
   it("returns scan settings", async () => {
@@ -54,27 +28,22 @@ describe("/api/scans/settings", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body.settings).toEqual({ baselines: [], suppressions: [], rules: [] });
+    expect(body.settings).toEqual({ suppressions: [], rules: [] });
+    expect(body.settings.baselines).toBeUndefined();
   });
 
-  it("updates a baseline", async () => {
-    mocks.setBaselineScan.mockResolvedValue({
-      baselines: [{ repositoryKey: "example/repo", scanId: "scan_1", updatedAt: "now" }],
-      suppressions: [],
-      rules: []
-    });
-
+  it.each([
+    { action: "setBaseline", repositoryKey: "example/repo", scanId: "scan_1" },
+    { action: "clearBaseline", repositoryKey: "example/repo" }
+  ])("rejects the removed $action action", async (body) => {
     const response = await PATCH(
       new Request("http://localhost/api/scans/settings", {
         method: "PATCH",
-        body: JSON.stringify({ action: "setBaseline", repositoryKey: "example/repo", scanId: "scan_1" })
+        body: JSON.stringify(body)
       })
     );
-    const body = await response.json();
 
-    expect(response.status).toBe(200);
-    expect(body.settings.baselines[0].scanId).toBe("scan_1");
-    expect(mocks.setBaselineScan).toHaveBeenCalledWith("example/repo", "scan_1");
+    expect(response.status).toBe(400);
   });
 
   it("requires an admin bearer token before updating settings when configured", async () => {
@@ -110,21 +79,9 @@ describe("/api/scans/settings", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mocks.setRuleEnabled).toHaveBeenCalledWith("secret.exposed-token", false);
-  });
-
-  it("rejects a baseline scan from another repository", async () => {
-    const response = await PATCH(
-      new Request("http://localhost/api/scans/settings", {
-        method: "PATCH",
-        body: JSON.stringify({ action: "setBaseline", repositoryKey: "other/repo", scanId: "scan_1" })
-      })
-    );
     const body = await response.json();
-
-    expect(response.status).toBe(400);
-    expect(body.error).toBe("Baseline scan does not belong to this repository.");
-    expect(mocks.setBaselineScan).not.toHaveBeenCalled();
+    expect(body.settings.baselines).toBeUndefined();
+    expect(mocks.setRuleEnabled).toHaveBeenCalledWith("secret.exposed-token", false);
   });
 
   it("updates a rule setting", async () => {

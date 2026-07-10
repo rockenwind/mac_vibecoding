@@ -32,7 +32,7 @@ export async function GET(_request: Request, context: RouteContext): Promise<Res
       summary: summarizeFindings(findings)
     };
 
-    return new Response(buildSecurityChecklist(checklistScan), {
+    return new Response(buildSecurityChecklist(checklistScan, { savedAt: entry.savedAt }), {
       headers: {
         "Content-Type": "text/markdown; charset=utf-8",
         "Content-Disposition": `attachment; filename="${entry.scan.id}-checklist.md"`

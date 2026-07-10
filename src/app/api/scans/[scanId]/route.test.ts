@@ -4,10 +4,8 @@ import { DELETE, GET } from "./route";
 const mocks = vi.hoisted(() => ({
   readScanHistory: vi.fn(),
   compareScanResults: vi.fn(),
-  findScanById: vi.fn(),
   readScanSettings: vi.fn(),
   repositoryKey: vi.fn(),
-  baselineScanIdForRepository: vi.fn(),
   suppressedFingerprintsForRepository: vi.fn(),
   deleteScan: vi.fn()
 }));
@@ -15,14 +13,12 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/scanHistory/store", () => ({
   readScanHistory: mocks.readScanHistory,
   compareScanResults: mocks.compareScanResults,
-  findScanById: mocks.findScanById,
   deleteScan: mocks.deleteScan
 }));
 
 vi.mock("@/lib/scanSettings/store", () => ({
   readScanSettings: mocks.readScanSettings,
   repositoryKey: mocks.repositoryKey,
-  baselineScanIdForRepository: mocks.baselineScanIdForRepository,
   suppressedFingerprintsForRepository: mocks.suppressedFingerprintsForRepository
 }));
 
@@ -68,16 +64,13 @@ describe("GET /api/scans/[scanId]", () => {
   it("returns a saved scan with comparison against the previous repository scan", async () => {
     mocks.readScanSettings.mockResolvedValue({ baselines: [], suppressions: [], rules: [] });
     mocks.repositoryKey.mockReturnValue("example/repo");
-    mocks.baselineScanIdForRepository.mockReturnValue(null);
     mocks.suppressedFingerprintsForRepository.mockReturnValue([]);
-    mocks.findScanById.mockReturnValue(null);
     mocks.readScanHistory.mockResolvedValue([
       { savedAt: "2026-07-02T00:10:00.000Z", scan: currentScan },
       { savedAt: "2026-07-02T00:00:00.000Z", scan: previousScan }
     ]);
     mocks.compareScanResults.mockReturnValue({
       previousScanId: "scan_previous",
-      baselineScanId: null,
       comparisonSource: "previous",
       newFindings: currentScan.findings,
       resolvedFindings: [],
@@ -104,22 +97,23 @@ describe("GET /api/scans/[scanId]", () => {
     );
   });
 
-  it("uses a saved baseline before the previous scan", async () => {
+  it("uses the previous scan instead of a stored baseline", async () => {
     const baselineScan = { ...previousScan, id: "scan_baseline" };
-    mocks.readScanSettings.mockResolvedValue({ baselines: [], suppressions: [], rules: [] });
+    mocks.readScanSettings.mockResolvedValue({
+      baselines: [{ repositoryKey: "example/repo", scanId: "scan_baseline", updatedAt: "2026-07-01T00:00:00.000Z" }],
+      suppressions: [],
+      rules: []
+    });
     mocks.repositoryKey.mockReturnValue("example/repo");
-    mocks.baselineScanIdForRepository.mockReturnValue("scan_baseline");
     mocks.suppressedFingerprintsForRepository.mockReturnValue(["fp"]);
-    mocks.findScanById.mockReturnValue({ savedAt: "2026-07-01T00:00:00.000Z", scan: baselineScan });
     mocks.readScanHistory.mockResolvedValue([
       { savedAt: "2026-07-02T00:10:00.000Z", scan: currentScan },
       { savedAt: "2026-07-02T00:00:00.000Z", scan: previousScan },
       { savedAt: "2026-07-01T00:00:00.000Z", scan: baselineScan }
     ]);
     mocks.compareScanResults.mockReturnValue({
-      previousScanId: "scan_baseline",
-      baselineScanId: "scan_baseline",
-      comparisonSource: "baseline",
+      previousScanId: "scan_previous",
+      comparisonSource: "previous",
       newFindings: [],
       resolvedFindings: [],
       unchangedFindings: [],
@@ -133,10 +127,9 @@ describe("GET /api/scans/[scanId]", () => {
     expect(response.status).toBe(200);
     expect(mocks.compareScanResults).toHaveBeenCalledWith(
       currentScan,
-      expect.objectContaining({ scan: baselineScan }),
+      expect.objectContaining({ scan: previousScan }),
       expect.objectContaining({
-        baselineScanId: "scan_baseline",
-        comparisonSource: "baseline",
+        comparisonSource: "previous",
         suppressedFingerprints: ["fp"]
       })
     );
