@@ -217,6 +217,18 @@ describe("analyzeFiles", () => {
     );
   });
 
+  it("does not flag nested safe example environment templates as exposed secrets", () => {
+    const findings = analyzeFiles([
+      {
+        path: "apps/web/.env.example",
+        size: 72,
+        content: "SCAN_ADMIN_TOKEN=replace-with-long-random-admin-token\n"
+      }
+    ]);
+
+    expect(findings.map((finding) => finding.ruleId)).not.toContain("secret.exposed-token");
+  });
+
   it("does not treat test and planning examples as production vulnerabilities", () => {
     const findings = analyzeFiles([
       {
@@ -280,7 +292,7 @@ describe("analyzeFiles", () => {
       {
         path: "src/app/page.tsx",
         size: 120,
-        content: 'const adminStorageKey = "repositoryScanAdminAccess";\n'
+        content: 'const adminTokenStorageKey = "repositoryScanAdminToken";\n'
       }
     ]);
 

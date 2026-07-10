@@ -292,6 +292,10 @@ function matchesRule(rule: RuleMatch, file: RepositoryFile, line: string): boole
     return false;
   }
 
+  if (rule.ruleId === "secret.exposed-token" && isEnvironmentTemplatePath(file.path)) {
+    return false;
+  }
+
   if (isRuleDefinitionSelfMatch(rule, file.path)) {
     return false;
   }
@@ -307,12 +311,21 @@ function matchesRule(rule: RuleMatch, file: RepositoryFile, line: string): boole
   return rule.pattern.test(line);
 }
 
+function isEnvironmentTemplatePath(path: string): boolean {
+  const normalized = path.replaceAll("\\", "/");
+  const fileName = (normalized.split("/").at(-1) ?? normalized).toLowerCase();
+  return isEnvironmentTemplateFile(fileName);
+}
+
 function isRuleDefinitionSelfMatch(rule: RuleMatch, path: string): boolean {
   return rule.ruleId === "prompt-injection.reveal-system-prompt" && path.replaceAll("\\", "/") === "src/lib/scanner/analyzers.ts";
 }
 
 function isEnvironmentReference(line: string): boolean {
-  return /\bprocess\.env\.[A-Z0-9_]+\b/.test(line) && !/[A-Z0-9_]+\s*[:=]\s*["'][^"']{16,}["']/.test(line);
+  return (
+    /\bprocess\.env\.[A-Z0-9_]+\b/.test(line) ||
+    /\b[A-Za-z0-9_]*(?:storage|localstorage)[A-Za-z0-9_]*\s*=\s*["'][A-Za-z0-9_.:-]{8,}["']/i.test(line)
+  ) && !/[A-Z0-9_]+\s*[:=]\s*["'][^"']{16,}["']/.test(line);
 }
 
 function isExampleOnlyPath(path: string): boolean {
